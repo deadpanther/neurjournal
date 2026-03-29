@@ -1,8 +1,8 @@
 """
-Lightweight memory store with TF-IDF retrieval.
+Semantic memory store with sentence-transformer embeddings.
 
-Loads memories from the JSON produced by ingest_locomo.py and supports
-cosine-similarity search over observation and event_summary texts.
+Uses all-MiniLM-L6-v2 for 384-dim dense embeddings — understands meaning,
+not just keywords. Falls back to TF-IDF if sentence-transformers unavailable.
 """
 
 import json
@@ -10,12 +10,17 @@ import logging
 from pathlib import Path
 
 import numpy as np
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
 
 logger = logging.getLogger(__name__)
 
 MEMORIES_PATH = Path(__file__).parent / "memories.json"
+
+try:
+    from sentence_transformers import SentenceTransformer
+    _ST_AVAILABLE = True
+except ImportError:
+    _ST_AVAILABLE = False
+    logger.warning("sentence-transformers not installed, falling back to TF-IDF")
 
 
 class MemoryStore:
@@ -23,7 +28,12 @@ class MemoryStore:
         self.memories: list[dict] = []
         self.conversations: list[dict] = []
         self.sample_questions: list[dict] = []
-        self._vectorizer: TfidfVectorizer | None = None
+        self._embeddings: np.ndarray | None = None
+        self._model = None
+        self._use_st = _ST_AVAILABLE
+
+        # TF-IDF fallback
+        self._vectorizer = None
         self._tfidf_matrix = None
 
         if path.exists():
@@ -44,12 +54,16 @@ class MemoryStore:
         if not self.memories:
             return
         texts = [m["text"] for m in self.memories]
-        self._vectorizer = TfidfVectorizer(
-            stop_words="english",
-            ngram_range=(1, 2),
-            max_features=5000,
-        )
-        self._tfidf_matrix = self._vectorizer.fit_transform(texts)
+
+        if self._use_st:
+            logger.info("Building semantic index with all-MiniLM-L6-v2...")
+            self._model = SentenceTransformer("all-MiniLM-L6-v2")
+            self._embeddings = self._model.encode(texts, show_progress_bar=False, normalize_embeddings=True)
+            logger.info(f"Encoded {len(texts)} memories → {self._embeddings.shape}")
+        else:
+            from sklearn.feature_extraction.text import TfidfVectorizer
+            self._vectorizer = TfidfVectorizer(stop_words="english", ngram_range=(1, 2), max_features=5000)
+            self._tfidf_matrix = self._vectorizer.fit_transform(texts)
 
     def _detect_speaker(self, query: str) -> str | None:
         """Return the speaker name if the query targets a specific person."""
@@ -61,18 +75,26 @@ class MemoryStore:
         return matched[0] if len(matched) == 1 else None
 
     def search(self, query: str, top_k: int = 5) -> list[dict]:
-        if not self.memories or self._vectorizer is None:
+        if not self.memories:
             return []
-        query_vec = self._vectorizer.transform([query])
-        scores = cosine_similarity(query_vec, self._tfidf_matrix).flatten()
+
+        if self._use_st and self._model is not None and self._embeddings is not None:
+            query_emb = self._model.encode([query], normalize_embeddings=True)
+            scores = (self._embeddings @ query_emb.T).flatten()
+        elif self._vectorizer is not None:
+            from sklearn.metrics.pairwise import cosine_similarity
+            query_vec = self._vectorizer.transform([query])
+            scores = cosine_similarity(query_vec, self._tfidf_matrix).flatten()
+        else:
+            return []
 
         target_speaker = self._detect_speaker(query)
         if target_speaker:
             for i, mem in enumerate(self.memories):
                 if mem.get("speaker", "").lower() == target_speaker.lower():
-                    scores[i] *= 3.0
+                    scores[i] *= 2.5
                 else:
-                    scores[i] *= 0.15
+                    scores[i] *= 0.2
 
         top_indices = np.argsort(scores)[::-1][:top_k]
         results = []

@@ -14,3 +14,12 @@ torchvision>=0.20
 
 # HuggingFace (for model download)
 huggingface_hub
+
+# Semantic search (replaces TF-IDF)
+sentence-transformers>=3.0
+
+# Emotion detection
+transformers>=4.40
+
+# Memory search fallback
+scikit-learn>=1.5

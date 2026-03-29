@@ -101,6 +101,7 @@ BRAIN_REGIONS = {
 # ─── Global Model State ───
 tribe_model = None
 model_mode = "loading"  # "tribe", "fallback", "loading"
+emotion_classifier = None
 
 # ─── Memory Store ───
 import sys
@@ -108,6 +109,22 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from memory_store import MemoryStore
 
 memory_store = MemoryStore()
+
+
+def load_emotion_model():
+    """Load lightweight emotion classifier (distilroberta, ~300MB)."""
+    global emotion_classifier
+    try:
+        from transformers import pipeline
+        emotion_classifier = pipeline(
+            "text-classification",
+            model="j-hartmann/emotion-english-distilroberta-base",
+            top_k=None,
+            device=-1,
+        )
+        logger.info("Emotion classifier loaded (distilroberta)")
+    except Exception as e:
+        logger.warning(f"Could not load emotion classifier: {e}")
 
 
 def load_tribe_model():
@@ -398,7 +415,7 @@ Return ONLY valid JSON, no markdown, no explanation."""
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: try to load TRIBE
+    load_emotion_model()
     load_tribe_model()
     yield
 
@@ -524,12 +541,22 @@ Answer in 1-3 sentences based ONLY on the memories above. If the memories don't 
             except Exception as e:
                 logger.error(f"Fallback on memory answer failed: {e}")
 
+    emotion_data = None
+    if emotion_classifier and generated_answer:
+        try:
+            emo_results = emotion_classifier(generated_answer[:512])
+            emotions = [{"label": r["label"], "score": round(r["score"], 4)} for r in emo_results[0]]
+            emotion_data = {"emotions": emotions, "dominant": max(emotions, key=lambda x: x["score"])["label"]}
+        except Exception:
+            pass
+
     elapsed = (time.time() - start) * 1000
     return {
         "query": req.query,
         "retrieved_memories": retrieved,
         "generated_answer": generated_answer,
         "tribe": tribe_result,
+        "emotion": emotion_data,
         "processing_time_ms": round(elapsed, 1),
     }
 
@@ -563,6 +590,20 @@ async def llm_chat_endpoint(request: Request):
         return {"text": text}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/emotion")
+async def detect_emotion(request: Request):
+    body = await request.json()
+    text = body.get("text", "")
+    if not text.strip():
+        raise HTTPException(status_code=400, detail="Text cannot be empty")
+    if emotion_classifier is None:
+        return {"emotions": [], "dominant": "neutral"}
+    results = emotion_classifier(text[:512])
+    emotions = [{"label": r["label"], "score": round(r["score"], 4)} for r in results[0]]
+    dominant = max(emotions, key=lambda x: x["score"])["label"]
+    return {"emotions": emotions, "dominant": dominant}
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
