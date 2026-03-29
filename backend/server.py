@@ -22,7 +22,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
@@ -551,6 +551,18 @@ async def memory_all():
 @app.get("/memory/sample-questions")
 async def memory_sample_questions():
     return {"questions": memory_store.sample_questions}
+
+
+@app.post("/llm_chat")
+async def llm_chat_endpoint(request: Request):
+    body = await request.json()
+    prompt = body.get("prompt", "")
+    max_tokens = body.get("max_tokens", 300)
+    try:
+        text = await llm_chat(prompt, max_tokens)
+        return {"text": text}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

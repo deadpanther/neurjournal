@@ -216,6 +216,40 @@
   .pb:hover{background:#818cf818;color:var(--t2);border-color:#818cf844}
   .pb.on{background:linear-gradient(135deg,#818cf8,#6366f1);color:#fff;border-color:transparent;box-shadow:0 2px 12px #6366f144}
   .pb-label{font:10px var(--mono);color:var(--t5);padding:4px 8px;display:flex;align-items:center}
+
+  /* ── VOICE INPUT ── */
+  .mic-btn{
+    width:36px;height:36px;border:1px solid var(--bd);border-radius:8px;background:transparent;
+    color:var(--t4);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+  .mic-btn:hover{background:#818cf818;color:var(--t2);border-color:#818cf844}
+  .mic-btn.recording{background:linear-gradient(135deg,#f8717166,#f8717133);border-color:#f87171;color:#f87171;animation:pulse 1s infinite}
+  .mic-btn svg{width:16px;height:16px;fill:currentColor}
+
+  /* ── BRAIN TOOLTIP ── */
+  .brain-tip{
+    position:absolute;padding:8px 12px;background:#0c1222f0;border:1px solid var(--bd);border-radius:8px;
+    font:11px var(--mono);color:var(--t2);pointer-events:none;z-index:5;
+    box-shadow:0 4px 16px #00000044;transition:opacity .15s;white-space:nowrap;display:none}
+  .brain-tip .bt-name{color:var(--t1);font-weight:600;margin-bottom:2px}
+  .brain-tip .bt-act{font-size:13px;font-weight:600;margin-bottom:2px}
+  .brain-tip .bt-fn{color:var(--t4);font-size:9px}
+
+  /* ── PATIENT SWITCHER ── */
+  .patient-bar{display:flex;gap:4px;padding:0 0 10px;flex-wrap:wrap}
+  .patient-pill{
+    font:500 10px var(--mono);padding:5px 12px;border:1px solid var(--bd);border-radius:6px;
+    background:transparent;color:var(--t4);cursor:pointer;transition:all .2s;letter-spacing:.3px}
+  .patient-pill:hover{border-color:#818cf844;color:var(--t2)}
+  .patient-pill.on{color:#fff;border-color:transparent;box-shadow:0 2px 8px #0004}
+
+  /* ── SESSION SUMMARY ── */
+  .session-sum{
+    background:linear-gradient(135deg,#818cf80c,#06b6d40c);border:1px solid #818cf833;
+    border-radius:14px;padding:18px;margin:10px 0;animation:fadeIn .4s ease-out}
+  .session-sum .ss-label{font:600 10px var(--mono);color:var(--accent);text-transform:uppercase;letter-spacing:1.5px;margin-bottom:10px;display:flex;align-items:center;gap:6px}
+  .session-sum .ss-label::before{content:'◆';font-size:7px}
+  .session-sum .ss-text{font:13px/1.7 var(--body);color:var(--t1)}
+  .session-sum .ss-meta{font:10px var(--mono);color:var(--dim);margin-top:8px}
 </style>
 </head>
 <body>
@@ -234,7 +268,10 @@
       <textarea id="inp" rows="3" placeholder="Describe a thought, emotion, or experience to map its neural signature..."></textarea>
       <div class="input-row">
         <span class="hint">⌘+Enter to analyze</span>
-        <button class="btn btn-go" id="go" disabled>Analyze</button>
+        <div style="display:flex;gap:6px;align-items:center">
+          <button class="mic-btn" id="mic-journal" onclick="window._toggleMic('journal')" title="Voice input"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
+          <button class="btn btn-go" id="go" disabled>Analyze</button>
+        </div>
       </div>
     </div>
     <div class="tabs">
@@ -272,6 +309,7 @@
       <span>0.0</span>
     </div>
 
+    <div class="brain-tip" id="brain-tip"><div class="bt-name"></div><div class="bt-act"></div><div class="bt-fn"></div></div>
     <div class="delta-ov" id="delta-ov"></div>
 
     <div class="controls" id="std-controls">
@@ -287,6 +325,7 @@
       <button class="pb" id="pb-play" onclick="window._tlTogglePlay()">&#9654;</button>
       <button class="pb" onclick="window._tlNext()">&#9654;|</button>
       <span class="pb-label" id="pb-label">0 / 0</span>
+      <button class="pb" id="pb-diff" onclick="window._tlDiff()" title="Compare with previous query">&#916; Diff</button>
     </div>
   </div>
 </div>
@@ -320,6 +359,7 @@ let backend={status:'offline',model_mode:'demo'};
 let entries=[],selEntry=null,curView='journal';
 let memConvos=[],memResults=null,memQuerying=false,sampleQuestions=[],memHistory=[],selMemIdx=null;
 let tlIdx=0,tlPlaying=false,tlPlayTimer=null,lerpAnimId=null,deltaDismiss=null;
+let speechRec=null,speechTarget=null,curPatient='all';
 
 // ── Color: "inferno" inspired ──
 function actColor(v){
@@ -353,9 +393,51 @@ function initScene(){
   const r=new THREE.DirectionalLight(0x22d3ee,.35);r.position.set(0,-50,-80);scene.add(r);
   const rim=new THREE.DirectionalLight(0x818cf8,.2);rim.position.set(0,60,-100);scene.add(rim);
   onRS();window.addEventListener('resize',onRS);anim();
+  initBrainTooltip(cv);
 }
 function onRS(){const c=ren.domElement,p=c.parentElement;ren.setSize(p.clientWidth,p.clientHeight);cam.aspect=p.clientWidth/p.clientHeight;cam.updateProjectionMatrix()}
 function anim(){requestAnimationFrame(anim);if(aRot&&bL){bL.rotation.y+=.003;bR.rotation.y+=.003}ctrl.update();ren.render(scene,cam)}
+
+// ── Brain region tooltip via raycasting ──
+const _ray=new THREE.Raycaster();
+const _mouse=new THREE.Vector2();
+function vertexToRegion(vi){
+  const n=20484;
+  for(const[k,info]of Object.entries(BR)){
+    for(const[st,en]of info.vr){
+      const s0=Math.floor(st*n/10484),s1=Math.min(Math.floor(en*n/10484),n);
+      if(vi>=s0&&vi<s1)return k;
+    }
+  }
+  return null;
+}
+function initBrainTooltip(cv){
+  const tip=document.getElementById('brain-tip');
+  cv.addEventListener('mousemove',e=>{
+    if(!bL||!bR||!tip)return;
+    const rect=cv.getBoundingClientRect();
+    _mouse.x=((e.clientX-rect.left)/rect.width)*2-1;
+    _mouse.y=-((e.clientY-rect.top)/rect.height)*2+1;
+    _ray.setFromCamera(_mouse,cam);
+    const hits=_ray.intersectObjects([bL,bR]);
+    if(hits.length===0){tip.style.display='none';return}
+    const hit=hits[0];
+    let vi=hit.face.a;
+    if(hit.object===bR)vi+=md.left.vertices.length;
+    const rk=vertexToRegion(vi);
+    if(!rk){tip.style.display='none';return}
+    const info=BR[rk];
+    const act=curAct?curAct[vi]:0;
+    tip.querySelector('.bt-name').textContent=info.label;
+    tip.querySelector('.bt-act').style.color=RC[rk];
+    tip.querySelector('.bt-act').textContent=`${Math.round(act*100)}% activation`;
+    tip.querySelector('.bt-fn').textContent=info.fn.join(' · ');
+    tip.style.display='block';
+    tip.style.left=Math.min(e.clientX-rect.left+12,rect.width-180)+'px';
+    tip.style.top=(e.clientY-rect.top-50)+'px';
+  });
+  cv.addEventListener('mouseleave',()=>{if(tip)tip.style.display='none'});
+}
 
 function mkMesh(verts,faces){
   const g=new THREE.BufferGeometry();
@@ -483,7 +565,9 @@ function renderPatterns(el){
   entries.forEach(e=>{if(!e.regions)return;const act=Object.entries(e.regions).filter(([_,v])=>(v.activation||0)>.5);for(let i=0;i<act.length;i++)for(let j=i+1;j<act.length;j++){const p=[act[i][1].label,act[j][1].label].sort().join(' ↔ ');coAct[p]=(coAct[p]||0)+1}});
   const topPair=Object.entries(coAct).sort((a,b)=>b[1]-a[1])[0];
   if(topPair&&topPair[1]>=2)pats.push({title:'Neural coupling',desc:`${topPair[0]} co-activate in ${topPair[1]}/${entries.length} entries.`,color:'#06b6d4',icon:'⟷'});
-  el.innerHTML=pats.length?pats.map((p,i)=>`<div style="background:linear-gradient(135deg,${p.color}0c,transparent);border:1px solid ${p.color}28;border-radius:14px;padding:16px;margin-bottom:10px;animation:fadeIn .3s ${i*.08}s both;border-left:3px solid ${p.color}"><div style="font:600 13px var(--mono);color:${p.color};margin-bottom:6px;display:flex;align-items:center;gap:8px"><span style="font-size:16px">${p.icon}</span>${p.title}</div><div style="font-size:12px;color:var(--t3);line-height:1.6">${p.desc}</div></div>`).join(''):'<div style="padding:60px 30px;text-align:center"><div style="font:500 14px var(--body);color:var(--t4);margin-bottom:8px">No patterns detected yet</div><div style="font:11px var(--mono);color:var(--dim)">Add more journal entries to discover neural patterns across sessions.</div></div>';
+  const patsHtml=pats.length?pats.map((p,i)=>`<div style="background:linear-gradient(135deg,${p.color}0c,transparent);border:1px solid ${p.color}28;border-radius:14px;padding:16px;margin-bottom:10px;animation:fadeIn .3s ${i*.08}s both;border-left:3px solid ${p.color}"><div style="font:600 13px var(--mono);color:${p.color};margin-bottom:6px;display:flex;align-items:center;gap:8px"><span style="font-size:16px">${p.icon}</span>${p.title}</div><div style="font-size:12px;color:var(--t3);line-height:1.6">${p.desc}</div></div>`).join(''):'<div style="padding:60px 30px;text-align:center"><div style="font:500 14px var(--body);color:var(--t4);margin-bottom:8px">No patterns detected yet</div><div style="font:11px var(--mono);color:var(--dim)">Add more journal entries to discover neural patterns across sessions.</div></div>';
+  const exportBtn=(entries.length+memHistory.length)>0?`<button class="btn btn-go" style="width:100%;margin-top:14px;padding:10px;font-size:11px;background:linear-gradient(135deg,#818cf8,#6366f1)" onclick="window._exportReport()">Export Session Report</button>`:'';
+  el.innerHTML=patsHtml+exportBtn;
 }
 
 // ── Memory View ──
@@ -519,11 +603,30 @@ function renderMemory(el){
     resultsHtml=qHtml+ansHtml+'<div class="ov-title" style="margin-top:12px">Retrieved Memories</div>'+memsHtml+followHtml;
   }
 
-  const samplesHtml=sampleQuestions.length?`<div class="mem-samples"><div class="ms-title">Try a question</div>${sampleQuestions.slice(0,8).map((q,i)=>`<div class="mem-sq" onclick="window._memSample(${i})">${q.question}</div>`).join('')}</div>`:'';
+  const filteredSamples=sampleQuestions.filter(q=>curPatient==='all'||q.target_speaker===curPatient);
+  const samplesHtml=filteredSamples.length?`<div class="mem-samples"><div class="ms-title">Try a question</div>${filteredSamples.slice(0,8).map((q,i)=>`<div class="mem-sq" onclick="window._memSampleFiltered(${i})">${q.question}</div>`).join('')}</div>`:'';
+
+  const patientColors={all:'var(--accent)',Caroline:'#60a5fa',Melanie:'#f472b6',Jon:'#a78bfa',Gina:'#2dd4bf'};
+  const patientHtml=`<div class="patient-bar">${['all','Caroline','Melanie','Jon','Gina'].map(p=>
+    `<button class="patient-pill${curPatient===p?' on':''}" data-p="${p}" onclick="window._setPatient('${p}')" style="${curPatient===p?'background:'+patientColors[p]+';box-shadow:0 2px 8px '+patientColors[p]+'44':''}">${p==='all'?'All Patients':p}</button>`
+  ).join('')}</div>`;
+
+  let summaryHtml='';
+  if(summaryLoading){
+    summaryHtml='<div style="padding:20px;text-align:center"><div class="spin" style="width:20px;height:20px;margin:0 auto"></div><p style="font:10px var(--mono);color:var(--t4);margin-top:8px">Generating session summary...</p></div>';
+  }else if(sessionSummary){
+    summaryHtml=`<div class="session-sum"><div class="ss-label">Session Summary</div><div class="ss-text">${sessionSummary}</div><div class="ss-meta">${memHistory.length} queries analyzed</div></div>`;
+  }
+  const sumBtnHtml=memHistory.length>=2&&!sessionSummary&&!summaryLoading?`<button class="btn btn-go" style="width:100%;margin-top:8px;padding:10px;font-size:11px;background:linear-gradient(135deg,#818cf8,#6366f1)" onclick="window._genSummary()">Generate Session Summary</button>`:'';
 
   el.innerHTML=`
-    <div class="mem-search"><input id="mem-inp" type="text" placeholder="Ask about Caroline, Melanie, Jon, or Gina..." onkeydown="if(event.key==='Enter')window._memQuery()"></div>
+    <div class="mem-search" style="display:flex;gap:6px;align-items:center;padding:12px 0 8px">
+      <input id="mem-inp" type="text" style="flex:1" placeholder="Ask about Caroline, Melanie, Jon, or Gina..." onkeydown="if(event.key==='Enter')window._memQuery()">
+      <button class="mic-btn" id="mic-memory" onclick="window._toggleMic('memory')" title="Voice input"><svg viewBox="0 0 24 24"><path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm-1-9c0-.55.45-1 1-1s1 .45 1 1v6c0 .55-.45 1-1 1s-1-.45-1-1V5zm6 6c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/></svg></button>
+    </div>
+    ${patientHtml}
     <div class="mem-convos">${convosHtml}</div>
+    ${summaryHtml}${sumBtnHtml}
     ${histHtml}
     ${resultsHtml}
     ${!memResults?samplesHtml:''}
@@ -743,6 +846,60 @@ function showDelta(prevRegions,curRegions){
   deltaDismiss=setTimeout(()=>{ov.innerHTML='';deltaDismiss=null},4000);
 }
 
+// ── Brain Diff Mode ──
+let diffMode=false;
+function paintDiff(vertsA,vertsB){
+  if(!bL||!bR||!vertsA||!vertsB)return;
+  const nL=md.left.vertices.length,n=Math.min(vertsA.length,vertsB.length);
+  const diffArr=new Array(n);
+  for(let i=0;i<n;i++)diffArr[i]=vertsB[i]-vertsA[i];
+  let maxAbs=0;
+  for(let i=0;i<n;i++)if(Math.abs(diffArr[i])>maxAbs)maxAbs=Math.abs(diffArr[i]);
+  if(maxAbs<.01)maxAbs=1;
+
+  const lc=bL.geometry.attributes.color;
+  for(let i=0;i<nL&&i<n;i++){
+    const d=diffArr[i]/maxAbs;
+    if(Math.abs(d)<.05){lc.setXYZ(i,.2,.22,.28)}
+    else if(d>0){lc.setXYZ(i,.1,.2+d*.7,.1+d*.5)}
+    else{const a=-d;lc.setXYZ(i,.2+a*.7,.1,.1)}
+  }
+  lc.needsUpdate=true;
+  const rc=bR.geometry.attributes.color,nR=md.right.vertices.length;
+  for(let i=0;i<nR;i++){
+    const gi=i+nL;if(gi>=n)break;
+    const d=diffArr[gi]/maxAbs;
+    if(Math.abs(d)<.05){rc.setXYZ(i,.2,.22,.28)}
+    else if(d>0){rc.setXYZ(i,.1,.2+d*.7,.1+d*.5)}
+    else{const a=-d;rc.setXYZ(i,.2+a*.7,.1,.1)}
+  }
+  rc.needsUpdate=true;
+}
+
+function toggleDiff(){
+  if(memHistory.length<2)return;
+  diffMode=!diffMode;
+  const btn=document.getElementById('pb-diff');
+  if(btn)btn.classList.toggle('on',diffMode);
+  if(diffMode){
+    const curH=memHistory[tlIdx];
+    const prevIdx=Math.min(tlIdx+1,memHistory.length-1);
+    const prevH=memHistory[prevIdx];
+    const vA=getVerts(prevH),vB=getVerts(curH);
+    if(vA&&vB){
+      paintDiff(vA,vB);
+      const regA=getRegions(prevH),regB=getRegions(curH);
+      if(regA&&regB)showDelta(regA,regB);
+      updSummary({summary:`Diff: Q${memHistory.length-prevIdx} → Q${memHistory.length-tlIdx}`,dominant:'diff mode',mode:'timeline'});
+    }
+  }else{
+    const h=memHistory[tlIdx];
+    const verts=getVerts(h);
+    if(verts)paintVerts(verts);
+  }
+}
+window._tlDiff=toggleDiff;
+
 // ── Playback controls ──
 function tlGoTo(idx){
   const data=tlData();
@@ -890,6 +1047,7 @@ window.setView=function(v){
 };
 window._memQuery=function(){const inp=document.getElementById('mem-inp');if(inp&&inp.value.trim()){memoryQuery(inp.value.trim())}};
 window._memSample=function(i){if(sampleQuestions[i]){const q=sampleQuestions[i].question;memoryQuery(q)}};
+window._memSampleFiltered=function(i){const filtered=sampleQuestions.filter(q=>curPatient==='all'||q.target_speaker===curPatient);if(filtered[i])memoryQuery(filtered[i].question)};
 window._selMem=function(i){selectMemHistory(i)};
 window._memFollowUp=function(i){if(_lastFollowUps[i])memoryQuery(_lastFollowUps[i])};
 window._tlGo=function(i){tlGoTo(i)};
@@ -965,9 +1123,128 @@ async function checkHealth(){
   if(backend.model_mode==='tribe')dot.style.animation='pulse 2s infinite';
 }
 
+// ── Voice Input (Web Speech API) ──
+function initSpeech(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){console.warn('SpeechRecognition not supported');return}
+  speechRec=new SR();
+  speechRec.continuous=false;speechRec.interimResults=true;speechRec.lang='en-US';
+  speechRec.onresult=function(e){
+    const transcript=Array.from(e.results).map(r=>r[0].transcript).join('');
+    if(speechTarget==='journal'){document.getElementById('inp').value=transcript;document.getElementById('go').disabled=!transcript.trim()}
+    else if(speechTarget==='memory'){const el=document.getElementById('mem-inp');if(el)el.value=transcript}
+  };
+  speechRec.onend=function(){
+    document.querySelectorAll('.mic-btn').forEach(b=>b.classList.remove('recording'));
+    if(speechTarget==='memory'){const el=document.getElementById('mem-inp');if(el&&el.value.trim())memoryQuery(el.value.trim())}
+    speechTarget=null;
+  };
+  speechRec.onerror=function(e){
+    console.error('Speech error:',e.error);
+    document.querySelectorAll('.mic-btn').forEach(b=>b.classList.remove('recording'));
+    speechTarget=null;
+    if(e.error==='not-allowed')alert('Microphone access denied. Please allow mic permissions in your browser settings.');
+  };
+}
+function toggleMic(target){
+  if(!speechRec){initSpeech()}
+  if(!speechRec){alert('Voice input is not supported in this browser. Use Chrome on localhost or HTTPS.');return}
+  if(speechTarget){speechRec.stop();return}
+  speechTarget=target;
+  document.querySelectorAll('.mic-btn').forEach(b=>b.classList.remove('recording'));
+  const btn=document.getElementById(target==='journal'?'mic-journal':'mic-memory');
+  if(btn)btn.classList.add('recording');
+  try{speechRec.start()}catch(e){
+    console.error('Speech start error:',e);
+    speechTarget=null;
+    if(btn)btn.classList.remove('recording');
+    alert('Could not start voice input. Make sure you are on localhost or HTTPS and microphone is allowed.');
+  }
+}
+window._toggleMic=toggleMic;
+
+// ── Patient Filter ──
+function setPatient(p){
+  curPatient=p;
+  document.querySelectorAll('.patient-pill').forEach(b=>b.classList.toggle('on',b.dataset.p===p));
+  renderList();
+}
+window._setPatient=setPatient;
+
+// ── Session Summary ──
+let sessionSummary=null,summaryLoading=false;
+async function generateSessionSummary(){
+  if(memHistory.length===0)return;
+  summaryLoading=true;renderList();
+  const queriesData=memHistory.map(h=>{
+    const reg=h.tribe?.regions||{};
+    const top=Object.entries(reg).sort((a,b)=>(b[1].activation||0)-(a[1].activation||0)).slice(0,3);
+    return{query:h.query,topRegions:top.map(([k,v])=>`${v.label} (${Math.round((v.activation||0)*100)}%)`).join(', ')};
+  });
+  const prompt=`You are a clinical neuroscience therapist assistant. Based on the following therapy session queries and their brain activation patterns, write a concise 3-4 sentence session summary. Focus on emotional patterns, shifts in neural activation, and therapeutic insights.\n\nSession queries:\n${queriesData.map((q,i)=>`${i+1}. "${q.query}" → Top activations: ${q.topRegions}`).join('\n')}\n\nWrite the summary in second person addressing the therapist (e.g. "Your patient showed...").`;
+  try{
+    if(backend.status==='ok'){
+      const r=await fetch(`${API}/llm_chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({prompt,max_tokens:300})});
+      if(r.ok){const d=await r.json();sessionSummary=d.text||d.response||'Summary unavailable.'}
+      else sessionSummary=fallbackSummary(queriesData);
+    }else{sessionSummary=fallbackSummary(queriesData)}
+  }catch{sessionSummary=fallbackSummary(queriesData)}
+  summaryLoading=false;renderList();
+}
+function fallbackSummary(data){
+  const regions={};
+  memHistory.forEach(h=>{const reg=h.tribe?.regions||{};Object.entries(reg).forEach(([k,v])=>{if(!regions[k])regions[k]={t:0,n:0,l:v.label};regions[k].t+=(v.activation||0);regions[k].n++})});
+  const sorted=Object.entries(regions).sort((a,b)=>(b[1].t/b[1].n)-(a[1].t/a[1].n));
+  const top=sorted.slice(0,3).map(([k,v])=>`${v.l} (avg ${Math.round(v.t/v.n*100)}%)`);
+  return`Across ${memHistory.length} queries, the dominant activation regions were ${top.join(', ')}. The session covered ${data.length} topics with varying emotional intensity across memory retrieval tasks.`;
+}
+window._genSummary=generateSessionSummary;
+
+// ── Export Session Report ──
+function exportReport(){
+  const now=new Date().toLocaleString();
+  const journalRows=entries.map(e=>{
+    const topR=e.regions?Object.entries(e.regions).sort((a,b)=>(b[1].activation||0)-(a[1].activation||0)).slice(0,5):[];
+    return`<div style="background:#111827;border:1px solid #1f2937;border-radius:10px;padding:14px;margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><strong style="color:#818cf8">${e.dominant||''}</strong><span style="color:#6b7280;font-size:11px">${e.mode||'demo'}</span></div>
+      <p style="color:#d1d5db;font-size:13px;line-height:1.6;margin-bottom:8px">${e.text}</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${topR.map(([k,v])=>`<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${RC[k]}22;color:${RC[k]}">${v.label} ${Math.round((v.activation||0)*100)}%</span>`).join('')}</div>
+    </div>`;
+  }).join('');
+
+  const memRows=memHistory.map((h,i)=>{
+    const reg=h.tribe?.regions||{};
+    const topR=Object.entries(reg).sort((a,b)=>(b[1].activation||0)-(a[1].activation||0)).slice(0,5);
+    return`<div style="background:#111827;border:1px solid #1f2937;border-radius:10px;padding:14px;margin-bottom:8px">
+      <div style="color:#22d3ee;font-weight:600;margin-bottom:4px">Q${i+1}: ${h.query||''}</div>
+      <p style="color:#d1d5db;font-size:13px;line-height:1.6;margin-bottom:6px">${h.generated_answer||''}</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">${topR.map(([k,v])=>`<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${RC[k]}22;color:${RC[k]}">${v.label} ${Math.round((v.activation||0)*100)}%</span>`).join('')}</div>
+    </div>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>NeurJournal Session Report</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{background:#030712;color:#e5e7eb;font-family:Inter,system-ui,sans-serif;padding:40px;max-width:800px;margin:0 auto}
+h1{font-size:28px;color:#f9fafb;margin-bottom:4px}h2{font-size:18px;color:#818cf8;margin:28px 0 12px;border-bottom:1px solid #1f2937;padding-bottom:8px}
+.meta{color:#6b7280;font-size:12px;margin-bottom:24px}.summary{background:linear-gradient(135deg,#818cf80c,#06b6d40c);border:1px solid #818cf833;border-radius:12px;padding:16px;margin:16px 0}
+.summary p{font-size:14px;line-height:1.7;color:#f3f4f6}</style></head>
+<body><h1>NeurJournal Session Report</h1><p class="meta">Generated ${now} · Powered by Meta TRIBE v2</p>
+${sessionSummary?`<div class="summary"><p>${sessionSummary}</p></div>`:''}
+${memRows?`<h2>Memory Queries (${memHistory.length})</h2>${memRows}`:''}
+${journalRows?`<h2>Journal Entries (${entries.length})</h2>${journalRows}`:''}
+</body></html>`;
+
+  const blob=new Blob([html],{type:'text/html'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download=`neurjournal-report-${Date.now()}.html`;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+window._exportReport=exportReport;
+
 // ── Init ──
 async function init(){
-  initScene();drawColorbar();
+  initScene();drawColorbar();initSpeech();
   entries=[...SAMPLES];selEntry=entries[0];renderList();
 
   try{
