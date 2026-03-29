@@ -250,6 +250,61 @@
   .session-sum .ss-label::before{content:'◆';font-size:7px}
   .session-sum .ss-text{font:13px/1.7 var(--body);color:var(--t1)}
   .session-sum .ss-meta{font:10px var(--mono);color:var(--dim);margin-top:8px}
+
+  /* ── THEME TOGGLE ── */
+  .theme-btn{
+    width:28px;height:28px;border:1px solid var(--bd);border-radius:6px;background:transparent;
+    color:var(--t4);cursor:pointer;transition:all .2s;display:flex;align-items:center;justify-content:center;flex-shrink:0;font-size:14px;margin-left:auto}
+  .theme-btn:hover{background:#818cf818;color:var(--t2);border-color:#818cf844}
+
+  /* ── LIGHT THEME ── */
+  html.light{
+    --bg:#f8fafc;--s1:#ffffff;--s2:#f1f5f9;--bd:#e2e8f0;--bd2:#cbd5e1;
+    --t1:#0f172a;--t2:#1e293b;--t3:#475569;--t4:#64748b;--t5:#94a3b8;--dim:#cbd5e1;
+    --accent:#6366f1;--green:#059669;--amber:#d97706;--cyan:#0891b2;
+    --glow1:#6366f122;--glow2:#06b6d418}
+  html.light .panel{background:var(--s1);border-right-color:var(--bd)}
+  html.light .panel::before{background:linear-gradient(180deg,#6366f108,transparent)}
+  html.light .viewer{background:var(--bg)}
+  html.light .viewer::before{background:radial-gradient(ellipse at 50% 30%,#6366f106,transparent 70%)}
+  html.light .card{background:linear-gradient(135deg,#fff,#f1f5f9);border-color:var(--bd)}
+  html.light .card:hover{border-color:#818cf844}
+  html.light .card.sel{background:linear-gradient(135deg,#eef2ff,#fff)}
+  html.light .ov-regions,.light .ov-summary{background:linear-gradient(180deg,#fffffff0,#f8fafcdd)}
+  html.light .controls,.light .playback{background:linear-gradient(180deg,#ffffffee,#f8fafcdd)}
+  html.light .brain-tip{background:#fffffff0}
+  html.light .colorbar{background:linear-gradient(180deg,#ffffffee,#f8fafcdd)}
+
+  /* ── COMPARE TABLE ── */
+  .cmp-overlay{
+    position:fixed;inset:0;background:#030712e6;z-index:100;display:none;align-items:center;justify-content:center;backdrop-filter:blur(8px)}
+  .cmp-overlay.show{display:flex}
+  .cmp-box{
+    background:var(--s1);border:1px solid var(--bd);border-radius:16px;padding:24px;
+    max-width:700px;width:90%;max-height:80vh;overflow-y:auto;box-shadow:0 16px 64px #00000066;animation:fadeIn .3s ease-out}
+  .cmp-box::-webkit-scrollbar{width:4px}
+  .cmp-box::-webkit-scrollbar-thumb{background:var(--bd);border-radius:4px}
+  .cmp-title{font:600 14px var(--mono);color:var(--t1);margin-bottom:16px;display:flex;justify-content:space-between;align-items:center}
+  .cmp-close{border:none;background:transparent;color:var(--t4);cursor:pointer;font-size:18px;padding:4px 8px;border-radius:6px;transition:all .2s}
+  .cmp-close:hover{background:#f8717118;color:#f87171}
+  .cmp-table{width:100%;border-collapse:collapse;font:11px var(--mono)}
+  .cmp-table th{text-align:left;color:var(--t4);font-weight:600;padding:8px 10px;border-bottom:1px solid var(--bd);text-transform:uppercase;letter-spacing:.5px;font-size:9px}
+  .cmp-table td{padding:7px 10px;border-bottom:1px solid #1a234022;color:var(--t3);vertical-align:middle}
+  .cmp-table tr:hover td{background:#818cf808}
+  .cmp-bar{height:6px;border-radius:3px;display:inline-block;vertical-align:middle;margin-right:6px;min-width:2px}
+
+  /* ── SIMILARITY RESULTS ── */
+  .sim-results{margin-top:12px;animation:fadeIn .3s ease-out}
+  .sim-match{
+    background:linear-gradient(135deg,var(--bg),#0c122288);border:1px solid var(--bd);border-radius:10px;
+    padding:12px;margin-bottom:6px;cursor:pointer;transition:all .2s;display:flex;align-items:center;gap:12px}
+  .sim-match:hover{border-color:#818cf833;transform:translateX(2px)}
+  .sim-pct{font:600 14px var(--mono);color:var(--accent);min-width:48px;text-align:right}
+  .sim-q{font:12px/1.4 var(--body);color:var(--t3);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  /* ── KEYBOARD HINT ── */
+  .kbd-hint{font:9px var(--mono);color:var(--dim);padding:8px 18px;border-top:1px solid var(--bd);text-align:center;flex-shrink:0}
+  .kbd-hint kbd{background:var(--bg);border:1px solid var(--bd);padding:1px 5px;border-radius:3px;font-size:9px;color:var(--t4)}
 </style>
 </head>
 <body>
@@ -261,6 +316,7 @@
         <div class="dot" id="dot" style="background:var(--accent);box-shadow:0 0 14px #818cf866,0 0 4px #818cf8"></div>
         <h1>neurjournal</h1>
         <span class="badge" id="badge" style="background:linear-gradient(135deg,#818cf818,#6366f10c);color:var(--accent);border:1px solid #818cf833">TRIBE v2</span>
+        <button class="theme-btn" id="theme-btn" onclick="window._toggleTheme()" title="Toggle light/dark theme">☀</button>
       </div>
       <p class="sub">real-time brain activation mapping powered by Meta TRIBE v2</p>
     </div>
@@ -281,6 +337,7 @@
       <button class="tab" data-v="patterns" onclick="setView('patterns')">Patterns</button>
     </div>
     <div class="entries" id="list"></div>
+    <div class="kbd-hint"><kbd>1</kbd>-<kbd>4</kbd> tabs · <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> navigate · <kbd>C</kbd> compare</div>
   </div>
 
   <!-- RIGHT PANEL -->
@@ -327,6 +384,13 @@
       <span class="pb-label" id="pb-label">0 / 0</span>
       <button class="pb" id="pb-diff" onclick="window._tlDiff()" title="Compare with previous query">&#916; Diff</button>
     </div>
+  </div>
+</div>
+
+<div class="cmp-overlay" id="cmp-overlay" onclick="if(event.target===this)window._closeCmp()">
+  <div class="cmp-box">
+    <div class="cmp-title"><span>Compare Activations</span><button class="cmp-close" onclick="window._closeCmp()">✕</button></div>
+    <div id="cmp-body"></div>
   </div>
 </div>
 
@@ -566,8 +630,9 @@ function renderPatterns(el){
   const topPair=Object.entries(coAct).sort((a,b)=>b[1]-a[1])[0];
   if(topPair&&topPair[1]>=2)pats.push({title:'Neural coupling',desc:`${topPair[0]} co-activate in ${topPair[1]}/${entries.length} entries.`,color:'#06b6d4',icon:'⟷'});
   const patsHtml=pats.length?pats.map((p,i)=>`<div style="background:linear-gradient(135deg,${p.color}0c,transparent);border:1px solid ${p.color}28;border-radius:14px;padding:16px;margin-bottom:10px;animation:fadeIn .3s ${i*.08}s both;border-left:3px solid ${p.color}"><div style="font:600 13px var(--mono);color:${p.color};margin-bottom:6px;display:flex;align-items:center;gap:8px"><span style="font-size:16px">${p.icon}</span>${p.title}</div><div style="font-size:12px;color:var(--t3);line-height:1.6">${p.desc}</div></div>`).join(''):'<div style="padding:60px 30px;text-align:center"><div style="font:500 14px var(--body);color:var(--t4);margin-bottom:8px">No patterns detected yet</div><div style="font:11px var(--mono);color:var(--dim)">Add more journal entries to discover neural patterns across sessions.</div></div>';
-  const exportBtn=(entries.length+memHistory.length)>0?`<button class="btn btn-go" style="width:100%;margin-top:14px;padding:10px;font-size:11px;background:linear-gradient(135deg,#818cf8,#6366f1)" onclick="window._exportReport()">Export Session Report</button>`:'';
-  el.innerHTML=patsHtml+exportBtn;
+  const cmpBtn=memHistory.length>=2?`<button class="btn" style="width:100%;margin-top:10px;padding:10px;font-size:11px;background:linear-gradient(135deg,#06b6d4,#0891b2);box-shadow:0 4px 16px #06b6d433" onclick="window._showCmp()">Compare Activations</button>`:'';
+  const exportBtn=(entries.length+memHistory.length)>0?`<button class="btn btn-go" style="width:100%;margin-top:10px;padding:10px;font-size:11px;background:linear-gradient(135deg,#818cf8,#6366f1)" onclick="window._exportReport()">Export Session Report</button>`:'';
+  el.innerHTML=patsHtml+cmpBtn+exportBtn;
 }
 
 // ── Memory View ──
@@ -600,7 +665,8 @@ function renderMemory(el){
     const followUps=generateFollowUps(memResults);
     _lastFollowUps=followUps;
     const followHtml=followUps.length?`<div class="mem-samples" style="margin-top:14px"><div class="ms-title">Suggested Follow-ups</div>${followUps.map((q,i)=>`<div class="mem-sq" onclick="window._memFollowUp(${i})">${q}</div>`).join('')}</div>`:'';
-    resultsHtml=qHtml+ansHtml+'<div class="ov-title" style="margin-top:12px">Retrieved Memories</div>'+memsHtml+followHtml;
+    const simBtnHtml=memHistory.length>=2&&selMemIdx!==null?`<button class="btn btn-go" style="width:100%;margin-top:10px;padding:8px;font-size:10px;background:linear-gradient(135deg,#818cf888,#6366f188)" onclick="window._findSimilar(${selMemIdx})">Find Similar Brain Patterns</button><div id="sim-results"></div>`:'';
+    resultsHtml=qHtml+ansHtml+'<div class="ov-title" style="margin-top:12px">Retrieved Memories</div>'+memsHtml+followHtml+simBtnHtml;
   }
 
   const filteredSamples=sampleQuestions.filter(q=>curPatient==='all'||q.target_speaker===curPatient);
@@ -1242,6 +1308,132 @@ ${journalRows?`<h2>Journal Entries (${entries.length})</h2>${journalRows}`:''}
 }
 window._exportReport=exportReport;
 
+// ── Theme Toggle ──
+let isDark=true;
+function toggleTheme(){
+  isDark=!isDark;
+  document.documentElement.classList.toggle('light',!isDark);
+  document.getElementById('theme-btn').textContent=isDark?'☀':'☾';
+  if(ren)ren.setClearColor(isDark?0x030712:0xf8fafc);
+  if(scene&&scene.fog)scene.fog.color.set(isDark?0x030712:0xf8fafc);
+}
+window._toggleTheme=toggleTheme;
+
+// ── Keyboard Shortcuts ──
+document.addEventListener('keydown',function(e){
+  if(e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA')return;
+  if(e.key==='1')window.setView('journal');
+  else if(e.key==='2')window.setView('memory');
+  else if(e.key==='3')window.setView('timeline');
+  else if(e.key==='4')window.setView('patterns');
+  else if(e.key===' '&&curView==='timeline'){e.preventDefault();window._tlTogglePlay()}
+  else if(e.key==='ArrowLeft'&&curView==='timeline'){e.preventDefault();window._tlPrev()}
+  else if(e.key==='ArrowRight'&&curView==='timeline'){e.preventDefault();window._tlNext()}
+  else if(e.key.toLowerCase()==='c'&&memHistory.length>=2){e.preventDefault();showCompare()}
+  else if(e.key==='Escape'){window._closeCmp()}
+});
+
+// ── Activation Similarity Search ──
+function cosineSim(a,b){
+  if(!a||!b||a.length!==b.length)return 0;
+  let dot=0,na=0,nb=0;
+  for(let i=0;i<a.length;i++){dot+=a[i]*b[i];na+=a[i]*a[i];nb+=b[i]*b[i]}
+  return(na&&nb)?dot/Math.sqrt(na*nb):0;
+}
+function findSimilar(idx){
+  if(memHistory.length<2)return[];
+  const target=memHistory[idx];
+  const tVerts=getVerts(target);
+  if(!tVerts)return[];
+  const results=[];
+  memHistory.forEach((h,i)=>{
+    if(i===idx)return;
+    const v=getVerts(h);
+    if(!v)return;
+    const sim=cosineSim(tVerts,v);
+    results.push({idx:i,query:h.query,sim});
+  });
+  return results.sort((a,b)=>b.sim-a.sim).slice(0,5);
+}
+window._findSimilar=function(idx){
+  const results=findSimilar(idx);
+  const el=document.getElementById('sim-results');
+  if(!el)return;
+  if(results.length===0){el.innerHTML='<div style="color:var(--t5);font:11px var(--mono);padding:8px">Need at least 2 queries to find similar patterns.</div>';return}
+  el.innerHTML=`<div class="sim-results"><div style="font:600 10px var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px">Similar Brain Patterns</div>${results.map(r=>
+    `<div class="sim-match" onclick="window._selMem(${r.idx})"><span class="sim-pct">${Math.round(r.sim*100)}%</span><span class="sim-q">${r.query||'Query '+(r.idx+1)}</span></div>`
+  ).join('')}</div>`;
+};
+
+// ── Compare Table ──
+let cmpIndices=[];
+function showCompare(){
+  if(memHistory.length<2)return;
+  cmpIndices=[0,1];
+  renderCompare();
+  document.getElementById('cmp-overlay').classList.add('show');
+}
+function renderCompare(){
+  const el=document.getElementById('cmp-body');
+  const queries=memHistory.slice(0,Math.min(5,memHistory.length));
+
+  const selectorHtml=`<div style="display:flex;gap:8px;margin-bottom:16px">${[0,1].map(slot=>
+    `<select style="flex:1;background:var(--bg);border:1px solid var(--bd);border-radius:8px;color:var(--t2);font:11px var(--mono);padding:8px;outline:none" onchange="window._cmpSel(${slot},this.value)">
+      ${memHistory.map((h,i)=>`<option value="${i}" ${i===cmpIndices[slot]?'selected':''}>${'Q'+(memHistory.length-i)}: ${(h.query||'').slice(0,40)}</option>`).join('')}
+    </select>`
+  ).join('<span style="color:var(--t5);font:600 13px var(--mono);display:flex;align-items:center">vs</span>')}</div>`;
+
+  const regA=getRegions(memHistory[cmpIndices[0]])||{};
+  const regB=getRegions(memHistory[cmpIndices[1]])||{};
+  const allKeys=Object.keys(BR);
+
+  const rows=allKeys.map(k=>{
+    const aVal=regA[k]?.activation||0;
+    const bVal=regB[k]?.activation||0;
+    const diff=bVal-aVal;
+    const diffStr=diff>0?`<span style="color:#34d399">+${Math.round(diff*100)}%</span>`:diff<0?`<span style="color:#f87171">${Math.round(diff*100)}%</span>`:`<span style="color:var(--t5)">—</span>`;
+    const c=RC[k]||'#818cf8';
+    return`<tr>
+      <td style="color:var(--t2);font-weight:500">${BR[k].label}</td>
+      <td><span class="cmp-bar" style="width:${Math.round(aVal*100)}px;background:${c}"></span>${Math.round(aVal*100)}%</td>
+      <td><span class="cmp-bar" style="width:${Math.round(bVal*100)}px;background:${c}"></span>${Math.round(bVal*100)}%</td>
+      <td>${diffStr}</td>
+    </tr>`;
+  }).join('');
+
+  el.innerHTML=`${selectorHtml}<table class="cmp-table"><thead><tr><th>Region</th><th>Query A</th><th>Query B</th><th>Δ Change</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+window._cmpSel=function(slot,val){cmpIndices[slot]=parseInt(val);renderCompare()};
+window._closeCmp=function(){document.getElementById('cmp-overlay').classList.remove('show')};
+window._showCmp=showCompare;
+
+// ── Animated brain entrance ──
+let brainEntrance=true;
+function animateBrainEntrance(){
+  if(!bL||!bR||!brainEntrance)return;
+  brainEntrance=false;
+  const startY=bL.rotation.y;
+  const startTime=performance.now();
+  const duration=1800;
+  const startScale=0.01;
+  bL.scale.setScalar(startScale);bR.scale.setScalar(startScale);
+  bL.material.opacity=0;bR.material.opacity=0;
+  bL.material.transparent=true;bR.material.transparent=true;
+  function tick(now){
+    const t=Math.min((now-startTime)/duration,1);
+    const ease=t<.5?4*t*t*t:1-Math.pow(-2*t+2,3)/2;
+    const scale=startScale+(1-startScale)*ease;
+    bL.scale.setScalar(scale);bR.scale.setScalar(scale);
+    bL.rotation.y=startY+Math.PI*2*(1-ease);
+    bR.rotation.y=startY+Math.PI*2*(1-ease);
+    bL.material.opacity=Math.min(1,t*2);
+    bR.material.opacity=Math.min(1,t*2);
+    if(t<1)requestAnimationFrame(tick);
+    else{bL.material.transparent=false;bR.material.transparent=false;bL.rotation.y=0;bR.rotation.y=0}
+  }
+  requestAnimationFrame(tick);
+}
+
 // ── Init ──
 async function init(){
   initScene();drawColorbar();initSpeech();
@@ -1253,6 +1445,7 @@ async function init(){
     document.getElementById('loadtxt').textContent='Building cortical surface…';
     await new Promise(r=>setTimeout(r,50));
     loadInto(curMesh);
+    animateBrainEntrance();
     if(selEntry.regions){paintVerts(regionToVerts(selEntry.regions));updRegPanel(selEntry.regions);updSummary(selEntry)}
     document.getElementById('loadov').classList.add('hide');
     document.getElementById('rpanel').style.opacity=1;
