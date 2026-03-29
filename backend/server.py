@@ -1,12 +1,11 @@
 """
-NeuroJournal Backend — TRIBE v2 Text Inference Server
+NeurJournal Backend — Multi-domain brain activation platform.
 
-Runs TRIBE v2 locally for text-only brain activation prediction.
-Falls back to Anthropic API emotion analysis if TRIBE can't load.
+Extensible to therapy, education, UX research, neuromarketing, meditation, sports.
+TRIBE v2 for fMRI prediction. Persistent sessions via SQLite. Domain adapter system.
 
 Usage:
     pip install fastapi uvicorn
-    # Plus tribev2 deps (see setup.sh)
     python server.py
 """
 
@@ -22,11 +21,14 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import numpy as np
 import uvicorn
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
+
+from database import SessionDB
+from domains import DOMAIN_REGISTRY, get_domain, list_domains as list_domain_configs, get_system_prompt
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -103,6 +105,9 @@ tribe_model = None
 model_mode = "loading"  # "tribe", "fallback", "loading"
 emotion_classifier = None
 
+# ─── Persistent Storage + Domains ───
+db = SessionDB()
+
 # ─── Memory Store ───
 import sys
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -128,27 +133,33 @@ def load_emotion_model():
 
 
 def load_tribe_model():
-    """Attempt to load TRIBE v2 from HuggingFace."""
+    """Attempt to load TRIBE v2 from HuggingFace with full features (audio + text)."""
     global tribe_model, model_mode
     try:
         logger.info("Loading TRIBE v2 model from HuggingFace...")
         from tribev2 import TribeModel
-
-        # Skip text features (LLaMA 3.2-3B) if user lacks HF access.
-        # Audio features via Wav2Vec-BERT are ungated and still produce
-        # meaningful cortical activation maps.
-        # Use audio-only features to avoid downloading LLaMA (~6GB).
-        # Wav2Vec-BERT is already cached and produces real cortical activations.
         import torch
+
         device = "cuda" if torch.cuda.is_available() else "cpu"
+
+        # Try full multimodal (audio + text via LLaMA 3.2-3B) first
+        features = ["audio", "text"]
+        try:
+            from huggingface_hub import model_info
+            model_info("meta-llama/Llama-3.2-3B")
+            logger.info("LLaMA 3.2-3B access confirmed — loading full multimodal TRIBE")
+        except Exception:
+            logger.warning("No access to meta-llama/Llama-3.2-3B — falling back to audio-only")
+            features = ["audio"]
+
         config_update = {
-            "data.features_to_use": ["audio"],
+            "data.features_to_use": features,
             "data.audio_feature.device": device,
             "data.text_feature.device": device,
             "data.num_workers": 2,
             "data.batch_size": 1,
         }
-        logger.info(f"Running TRIBE with audio features only (Wav2Vec-BERT) on {device}")
+        logger.info(f"Running TRIBE with {features} on {device}")
 
         model = TribeModel.from_pretrained(
             "facebook/tribev2",
@@ -158,11 +169,12 @@ def load_tribe_model():
         )
         tribe_model = model
         model_mode = "tribe"
-        logger.info("TRIBE v2 loaded successfully! Running in TRIBE mode.")
+        feature_str = "audio + text (LLaMA 3.2-3B)" if "text" in features else "audio only (Wav2Vec-BERT)"
+        logger.info(f"TRIBE v2 loaded successfully! Features: {feature_str}")
         return True
     except Exception as e:
         logger.warning(f"Could not load TRIBE v2: {e}")
-        logger.info("Falling back to Anthropic API mode.")
+        logger.info("Falling back to API mode.")
         model_mode = "fallback"
         return False
 
@@ -417,10 +429,12 @@ Return ONLY valid JSON, no markdown, no explanation."""
 async def lifespan(app: FastAPI):
     load_emotion_model()
     load_tribe_model()
+    for d in DOMAIN_REGISTRY.values():
+        db.ensure_domain(d["id"], d["name"], d.get("description", ""), d)
     yield
 
 
-app = FastAPI(title="NeuroJournal API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="NeurJournal API", version="2.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -450,7 +464,22 @@ class AnalyzeResponse(BaseModel):
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model_mode": model_mode}
+    features = []
+    if tribe_model is not None:
+        try:
+            cfg = tribe_model.cfg if hasattr(tribe_model, 'cfg') else None
+            if cfg:
+                features = list(cfg.get("data", {}).get("features_to_use", []))
+        except Exception:
+            pass
+    return {
+        "status": "ok",
+        "model_mode": model_mode,
+        "features": features,
+        "has_emotion": emotion_classifier is not None,
+        "platform": True,
+        "domains": list_domain_configs(),
+    }
 
 
 @app.post("/analyze", response_model=AnalyzeResponse)
@@ -491,6 +520,9 @@ class MemoryQueryRequest(BaseModel):
     query: str
     top_k: int = 5
     run_tribe: bool = True
+    domain_id: str = "therapy"
+    session_id: str | None = None
+    subject_id: str | None = None
 
 
 @app.post("/memory/query")
@@ -510,9 +542,11 @@ async def memory_query(req: MemoryQueryRequest):
     for m in retrieved:
         speakers.update(m.get("speakers", []))
 
-    # Generate answer from memories using LLM
+    domain_prompt = get_system_prompt(req.domain_id)
     generated_answer = ""
-    prompt = f"""You are a memory-augmented assistant. Given retrieved memories from long-term conversations between {', '.join(speakers)}, answer the user's question concisely and accurately.
+    prompt = f"""{domain_prompt}
+
+Given retrieved memories from conversations involving {', '.join(speakers) if speakers else 'participants'}, answer the question concisely and accurately.
 
 Retrieved memories:
 {memory_context}
@@ -551,6 +585,23 @@ Answer in 1-3 sentences based ONLY on the memories above. If the memories don't 
             pass
 
     elapsed = (time.time() - start) * 1000
+
+    if req.session_id and req.subject_id:
+        try:
+            db.save_activation(
+                session_id=req.session_id,
+                subject_id=req.subject_id,
+                query=req.query,
+                generated_answer=generated_answer,
+                regions=tribe_result.get("regions", {}) if tribe_result else {},
+                vertex_activations=tribe_result.get("vertex_activations") if tribe_result else None,
+                emotion=emotion_data or {},
+                processing_time_ms=round(elapsed, 1),
+                model_mode=tribe_result.get("mode", "unknown") if tribe_result else "none",
+            )
+        except Exception as e:
+            logger.warning(f"Could not persist activation: {e}")
+
     return {
         "query": req.query,
         "retrieved_memories": retrieved,
@@ -604,6 +655,158 @@ async def detect_emotion(request: Request):
     emotions = [{"label": r["label"], "score": round(r["score"], 4)} for r in results[0]]
     dominant = max(emotions, key=lambda x: x["score"])["label"]
     return {"emotions": emotions, "dominant": dominant}
+
+
+# ─── Platform: Domain Endpoints ───
+
+
+@app.get("/domains")
+async def domains_list():
+    return {"domains": list_domain_configs()}
+
+
+@app.get("/domains/{domain_id}")
+async def domain_detail(domain_id: str):
+    d = get_domain(domain_id)
+    if not d:
+        raise HTTPException(status_code=404, detail=f"Domain '{domain_id}' not found")
+    return d
+
+
+# ─── Platform: Subject Endpoints ───
+
+
+class CreateSubjectRequest(BaseModel):
+    domain_id: str
+    name: str
+    metadata: dict = {}
+
+
+@app.post("/subjects")
+async def create_subject(req: CreateSubjectRequest):
+    d = get_domain(req.domain_id)
+    if not d:
+        raise HTTPException(status_code=400, detail=f"Unknown domain: {req.domain_id}")
+    return db.create_subject(req.domain_id, req.name, req.metadata)
+
+
+@app.get("/subjects")
+async def list_subjects(domain_id: str = None):
+    return {"subjects": db.list_subjects(domain_id)}
+
+
+@app.get("/subjects/{subject_id}/history")
+async def subject_history(subject_id: str, limit: int = 50):
+    return {"history": db.get_subject_history(subject_id, limit)}
+
+
+@app.get("/subjects/{subject_id}/trends")
+async def subject_trends(subject_id: str):
+    return db.get_subject_trends(subject_id)
+
+
+# ─── Platform: Session Endpoints ───
+
+
+class CreateSessionRequest(BaseModel):
+    subject_id: str
+    domain_id: str
+    metadata: dict = {}
+
+
+@app.post("/sessions")
+async def create_session(req: CreateSessionRequest):
+    return db.create_session(req.subject_id, req.domain_id, req.metadata)
+
+
+# ─── Platform: Save Activation (called after analyze/memory query) ───
+
+
+class SaveActivationRequest(BaseModel):
+    session_id: str
+    subject_id: str
+    query: str
+    generated_answer: str = ""
+    regions: dict = {}
+    vertex_activations: list[float] | None = None
+    emotion: dict = {}
+    processing_time_ms: float = 0
+    model_mode: str = "demo"
+
+
+@app.post("/activations")
+async def save_activation(req: SaveActivationRequest):
+    return db.save_activation(
+        session_id=req.session_id,
+        subject_id=req.subject_id,
+        query=req.query,
+        generated_answer=req.generated_answer,
+        regions=req.regions,
+        vertex_activations=req.vertex_activations,
+        emotion=req.emotion,
+        processing_time_ms=req.processing_time_ms,
+        model_mode=req.model_mode,
+    )
+
+
+# ─── Platform: File Upload & Custom Ingestion ───
+
+
+@app.post("/upload")
+async def upload_content(
+    file: UploadFile = File(...),
+    domain_id: str = Form("therapy"),
+    subject_id: str = Form(None),
+):
+    d = get_domain(domain_id)
+    if not d:
+        raise HTTPException(status_code=400, detail=f"Unknown domain: {domain_id}")
+
+    content = await file.read()
+    text = content.decode("utf-8", errors="replace")
+
+    record = db.save_upload(
+        domain_id=domain_id,
+        filename=file.filename,
+        content=text,
+        subject_id=subject_id,
+    )
+
+    n_chunks = 0
+    if file.filename.endswith(".json"):
+        try:
+            data = json.loads(text)
+            if isinstance(data, list):
+                for item in data:
+                    if "text" in item:
+                        memory_store.memories.append(item)
+                        n_chunks += 1
+                memory_store._build_index()
+        except json.JSONDecodeError:
+            pass
+    elif file.filename.endswith(".txt") or file.filename.endswith(".csv"):
+        lines = [l.strip() for l in text.split("\n") if l.strip()]
+        for line in lines:
+            memory_store.memories.append({
+                "text": line,
+                "speaker": subject_id or "unknown",
+                "session": 0,
+                "date": "",
+                "type": "uploaded",
+            })
+            n_chunks += 1
+        if n_chunks:
+            memory_store._build_index()
+
+    return {
+        "id": record["id"],
+        "filename": file.filename,
+        "chunks_ingested": n_chunks,
+        "domain_id": domain_id,
+    }
+
+
+# ─── Static Files ───
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent

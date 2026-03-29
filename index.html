@@ -315,6 +315,49 @@
     font:600 9px var(--mono);padding:3px 8px;border-radius:5px;letter-spacing:.3px;
     display:inline-flex;align-items:center;gap:4px;animation:fadeIn .3s ease-out}
   .emo-icon{font-size:11px}
+
+  /* ── DOMAIN SWITCHER ── */
+  .domain-bar{display:flex;gap:4px;padding:8px 26px;border-bottom:1px solid var(--bd);overflow-x:auto;flex-shrink:0}
+  .domain-bar::-webkit-scrollbar{height:0}
+  .domain-pill{
+    font:500 10px var(--body);padding:6px 14px;border:1px solid var(--bd);border-radius:20px;
+    background:transparent;color:var(--t4);cursor:pointer;transition:all .25s;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:5px;flex-shrink:0}
+  .domain-pill:hover{border-color:var(--bd2);color:var(--t2);background:var(--s2)}
+  .domain-pill.on{background:var(--accent);color:#fff;border-color:var(--accent);box-shadow:0 2px 10px #a78bfa33}
+  .domain-pill .dp-icon{font-size:13px}
+
+  /* ── SUBJECT PICKER ── */
+  .subject-bar{display:flex;gap:6px;padding:6px 26px;border-bottom:1px solid var(--bd);align-items:center;flex-shrink:0}
+  .subject-bar .sb-label{font:500 9px var(--mono);color:var(--t5);text-transform:uppercase;letter-spacing:1.5px;margin-right:4px}
+  .subject-pill{
+    font:500 10px var(--body);padding:4px 12px;border:1px solid var(--bd);border-radius:16px;
+    background:transparent;color:var(--t4);cursor:pointer;transition:all .25s}
+  .subject-pill:hover{border-color:var(--cyan);color:var(--t2)}
+  .subject-pill.on{background:rgba(103,232,249,.1);color:var(--cyan);border-color:var(--cyan)}
+  .add-subject{
+    font:500 12px var(--mono);padding:4px 12px;border:1px dashed var(--bd);border-radius:16px;
+    background:transparent;color:var(--t5);cursor:pointer;transition:all .25s}
+  .add-subject:hover{border-color:var(--accent);color:var(--accent)}
+
+  /* ── UPLOAD BTN ── */
+  .upload-zone{
+    border:1px dashed var(--bd);border-radius:var(--radius);padding:14px;text-align:center;
+    margin:8px 0;cursor:pointer;transition:all .25s;color:var(--t4);font:400 11px var(--body)}
+  .upload-zone:hover{border-color:var(--accent);color:var(--accent);background:rgba(167,139,250,.04)}
+  .upload-zone input{display:none}
+
+  /* ── TRENDS PANEL ── */
+  .trends-card{
+    background:var(--s2);border:1px solid var(--bd);border-radius:var(--radius);padding:16px;margin-bottom:8px;animation:fadeIn .3s}
+  .trends-title{font:500 9px var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:2px;margin-bottom:12px}
+  .trend-row{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .trend-label{font:400 10px var(--mono);color:var(--t3);width:120px;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .trend-arrow{font:600 12px var(--mono);width:36px;text-align:center}
+  .trend-up{color:var(--green)}
+  .trend-down{color:#f87171}
+  .trend-flat{color:var(--t5)}
+  .trend-val{font:400 9px var(--mono);color:var(--t5)}
 </style>
 </head>
 <body>
@@ -328,8 +371,10 @@
         <span class="badge" id="badge" style="background:linear-gradient(135deg,#818cf818,#6366f10c);color:var(--accent);border:1px solid #818cf833">TRIBE v2</span>
         <button class="theme-btn" id="theme-btn" onclick="window._toggleTheme()" title="Toggle light/dark theme">☀</button>
       </div>
-      <p class="sub">Real-time brain activation mapping, powered by Meta TRIBE v2</p>
+      <p class="sub" id="sub-text">Real-time brain activation mapping, powered by Meta TRIBE v2</p>
     </div>
+    <div class="domain-bar" id="domain-bar"></div>
+    <div class="subject-bar" id="subject-bar" style="display:none"></div>
     <div class="input-wrap">
       <textarea id="inp" rows="3" placeholder="Describe a thought, emotion, or experience to map its neural signature..."></textarea>
       <div class="input-row">
@@ -436,6 +481,13 @@ let entries=[],selEntry=null,curView='journal';
 let memConvos=[],memResults=null,memQuerying=false,sampleQuestions=[],memHistory=[],selMemIdx=null;
 let tlIdx=0,tlPlaying=false,tlPlayTimer=null,lerpAnimId=null,deltaDismiss=null;
 let speechRec=null,speechTarget=null,curPatient='all';
+
+// ── Platform: domain/session/subject state ──
+let availDomains=[];
+let curDomain='therapy';
+let curSubjects=[];
+let curSubject=null;  // {id, name, domain_id}
+let curSession=null;  // {id, subject_id, domain_id}
 
 // ── Color: "inferno" inspired ──
 function actColor(v){
@@ -786,6 +838,16 @@ function renderMemory(el){
   }
   const sumBtnHtml=memHistory.length>=2&&!sessionSummary&&!summaryLoading?`<button class="btn btn-go" style="width:100%;margin-top:8px;padding:10px;font-size:11px;background:linear-gradient(135deg,#818cf8,#6366f1)" onclick="window._genSummary()">Generate Session Summary</button>`:'';
 
+  let trendsHtml='';
+  if(curSubject&&curSubject.id){
+    loadSubjectTrends(curSubject.id).then(t=>{
+      const container=document.getElementById('trends-slot');
+      if(container&&t)container.innerHTML=renderTrendsCard(t);
+    });
+  }
+
+  const uploadHtml=`<div class="upload-zone" onclick="window._uploadFile()">📎 Upload conversations (.json, .txt, .csv) to add memories</div>`;
+
   el.innerHTML=`
     <div class="mem-search" style="display:flex;gap:6px;align-items:center;padding:12px 0 8px">
       <input id="mem-inp" type="text" style="flex:1" placeholder="Ask about Caroline, Melanie, Jon, or Gina..." onkeydown="if(event.key==='Enter')window._memQuery()">
@@ -793,6 +855,8 @@ function renderMemory(el){
     </div>
     ${patientHtml}
     <div class="mem-convos">${convosHtml}</div>
+    ${uploadHtml}
+    <div id="trends-slot"></div>
     ${summaryHtml}${sumBtnHtml}
     ${histHtml}
     ${resultsHtml}
@@ -804,7 +868,10 @@ async function memoryQuery(query){
   memQuerying=true;memResults=null;selMemIdx=null;renderList();
   try{
     if(backend.status==='ok'){
-      const r=await fetch(`${API}/memory/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,top_k:5,run_tribe:true})});
+      const body={query,top_k:5,run_tribe:true,domain_id:curDomain};
+      if(curSession)body.session_id=curSession.id;
+      if(curSubject)body.subject_id=curSubject.id;
+      const r=await fetch(`${API}/memory/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
       memResults=await r.json();
     }else{
       memResults=demoMemoryQuery(query);
@@ -1282,12 +1349,16 @@ function demoResult(text){
 async function checkHealth(){
   try{const r=await fetch(`${API}/health`);backend=await r.json()}
   catch{backend={status:'offline',model_mode:'demo'}}
-  const c=backend.model_mode==='tribe'?'#6ee7b7':backend.model_mode==='fallback'?'#fcd34d':'#a78bfa';
-  const l=backend.model_mode==='tribe'?'TRIBE v2 LIVE':backend.model_mode==='fallback'?'API MODE':'TRIBE v2';
+  const hasText=backend.features&&backend.features.includes('text');
+  const c=backend.model_mode==='tribe'?(hasText?'#6ee7b7':'#67e8f9'):backend.model_mode==='fallback'?'#fcd34d':'#a78bfa';
+  const l=backend.model_mode==='tribe'?(hasText?'TRIBE v2 FULL':'TRIBE v2 AUDIO'):backend.model_mode==='fallback'?'API MODE':'TRIBE v2';
   const dot=document.getElementById('dot'),badge=document.getElementById('badge');
   dot.style.background=c;dot.style.boxShadow=`0 0 12px ${c}44`;
   badge.textContent=l;badge.style.background=`${c}14`;badge.style.color=c;badge.style.border=`1px solid ${c}22`;
   if(backend.model_mode==='tribe')dot.style.animation='pulse 2s infinite';
+  const sub=document.getElementById('sub-text');
+  if(sub&&backend.model_mode==='tribe'&&hasText)sub.textContent='Full multimodal: LLaMA 3.2-3B + Wav2Vec-BERT + Transformer';
+  else if(sub&&backend.model_mode==='tribe')sub.textContent='Audio mode: Wav2Vec-BERT + Transformer';
 }
 
 // ── Voice Input (Web Speech API) ──
@@ -1535,6 +1606,150 @@ function animateBrainEntrance(){
   requestAnimationFrame(tick);
 }
 
+// ── Platform: Domain & Subject Management ──
+
+async function loadDomains(){
+  try{
+    const r=await fetch(`${API}/domains`);
+    const d=await r.json();
+    availDomains=d.domains||[];
+  }catch{availDomains=[{id:'therapy',name:'Clinical Therapy',icon:'🧠',description:'Track neural patterns during therapeutic conversations.'}]}
+  renderDomainBar();
+}
+
+function renderDomainBar(){
+  const el=document.getElementById('domain-bar');
+  if(!el)return;
+  el.innerHTML=availDomains.map(d=>
+    `<button class="domain-pill${d.id===curDomain?' on':''}" onclick="window._setDomain('${d.id}')" title="${d.description||''}">
+      <span class="dp-icon">${d.icon||'🧠'}</span>${d.name}
+    </button>`
+  ).join('');
+}
+
+async function setDomain(domainId){
+  curDomain=domainId;
+  curSubject=null;
+  curSession=null;
+  renderDomainBar();
+
+  const domain=availDomains.find(d=>d.id===domainId);
+  const sub=document.getElementById('sub-text');
+  if(sub&&domain)sub.textContent=domain.description||'Brain activation mapping platform';
+
+  const inp=document.getElementById('inp');
+  if(inp){
+    const full=await fetchDomainDetail(domainId);
+    if(full&&full.query_placeholder)inp.placeholder=full.query_placeholder;
+  }
+
+  await loadSubjects();
+}
+window._setDomain=setDomain;
+
+let _domainDetailCache={};
+async function fetchDomainDetail(domainId){
+  if(_domainDetailCache[domainId])return _domainDetailCache[domainId];
+  try{const r=await fetch(`${API}/domains/${domainId}`);const d=await r.json();_domainDetailCache[domainId]=d;return d}
+  catch{return null}
+}
+
+async function loadSubjects(){
+  try{
+    const r=await fetch(`${API}/subjects?domain_id=${curDomain}`);
+    const d=await r.json();
+    curSubjects=d.subjects||[];
+  }catch{curSubjects=[]}
+  renderSubjectBar();
+}
+
+function renderSubjectBar(){
+  const el=document.getElementById('subject-bar');
+  if(!el)return;
+  const domConf=availDomains.find(d=>d.id===curDomain);
+  const label=domConf?domConf.name.split(' ')[0]:'Subject';
+  el.style.display='flex';
+  el.innerHTML=`<span class="sb-label">${label}s</span>`+
+    curSubjects.map(s=>
+      `<button class="subject-pill${curSubject&&curSubject.id===s.id?' on':''}" onclick="window._pickSubject('${s.id}')">${s.name}</button>`
+    ).join('')+
+    `<button class="add-subject" onclick="window._addSubject()">+ New</button>`;
+}
+
+async function pickSubject(sid){
+  curSubject=curSubjects.find(s=>s.id===sid)||null;
+  if(curSubject){
+    const sr=await fetch(`${API}/sessions`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({subject_id:curSubject.id,domain_id:curDomain})
+    });
+    curSession=await sr.json();
+  }
+  renderSubjectBar();
+}
+window._pickSubject=pickSubject;
+
+async function addSubject(){
+  const name=prompt('Enter name:');
+  if(!name||!name.trim())return;
+  try{
+    const r=await fetch(`${API}/subjects`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({domain_id:curDomain,name:name.trim()})
+    });
+    const s=await r.json();
+    curSubjects.push(s);
+    await pickSubject(s.id);
+  }catch(e){console.error('Failed to create subject:',e)}
+}
+window._addSubject=addSubject;
+
+async function loadSubjectTrends(subjectId){
+  try{const r=await fetch(`${API}/subjects/${subjectId}/trends`);return await r.json()}
+  catch{return null}
+}
+
+function renderTrendsCard(trends){
+  if(!trends||!trends.regions||Object.keys(trends.regions).length===0)return '';
+  const rows=Object.entries(trends.regions).sort((a,b)=>Math.abs(b[1].change)-Math.abs(a[1].change)).slice(0,8);
+  return `<div class="trends-card">
+    <div class="trends-title">Longitudinal Trends · ${trends.total_queries} queries</div>
+    ${rows.map(([k,v])=>{
+      const cls=v.change>0.02?'trend-up':v.change<-0.02?'trend-down':'trend-flat';
+      const arrow=v.change>0.02?'↑':v.change<-0.02?'↓':'→';
+      return `<div class="trend-row">
+        <span class="trend-label">${v.label}</span>
+        <span class="trend-arrow ${cls}">${arrow} ${Math.abs(v.change*100).toFixed(1)}%</span>
+        <span class="trend-val">${(v.current_avg*100).toFixed(0)}% avg</span>
+      </div>`;
+    }).join('')}
+    <div style="font:400 9px var(--mono);color:var(--t5);margin-top:8px">
+      Top emotions: ${Object.entries(trends.emotions||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([k,v])=>`${k}(${v})`).join(', ')||'—'}
+    </div>
+  </div>`;
+}
+
+async function uploadFile(){
+  const input=document.createElement('input');
+  input.type='file';
+  input.accept='.json,.txt,.csv';
+  input.onchange=async function(){
+    const file=input.files[0];if(!file)return;
+    const fd=new FormData();
+    fd.append('file',file);
+    fd.append('domain_id',curDomain);
+    if(curSubject)fd.append('subject_id',curSubject.id);
+    try{
+      const r=await fetch(`${API}/upload`,{method:'POST',body:fd});
+      const d=await r.json();
+      alert(`Uploaded ${file.name}: ${d.chunks_ingested} memories ingested.`);
+      loadMemoryMeta();
+    }catch(e){alert('Upload failed: '+e.message)}
+  };
+  input.click();
+}
+window._uploadFile=uploadFile;
+
 // ── Init ──
 async function init(){
   initScene();drawColorbar();initSpeech();
@@ -1554,6 +1769,8 @@ async function init(){
   }catch(e){document.getElementById('loadtxt').textContent='Error: '+e.message;console.error(e)}
 
   await checkHealth();setInterval(checkHealth,8000);
+  await loadDomains();
+  await loadSubjects();
   loadMemoryMeta();
   const inp=document.getElementById('inp'),btn=document.getElementById('go');
   inp.addEventListener('input',()=>btn.disabled=!inp.value.trim());
