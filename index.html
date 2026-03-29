@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NeuroJournal — Emotional Activation Mapping</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600&family=Inter:wght@300;400;500;600;700&display=swap');
+  :root {
+    --bg:#020617;--s1:#0f172a;--s2:#0a0f1e;--bd:#1e293b;--bd2:#334155;
+    --t1:#f8fafc;--t2:#e2e8f0;--t3:#94a3b8;--t4:#64748b;--t5:#475569;--dim:#334155;
+    --mono:'JetBrains Mono',monospace;--body:'Inter',system-ui,sans-serif;
+    --accent:#6366f1;--green:#22c55e;--amber:#f59e0b;--cyan:#06b6d4;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%;overflow:hidden}
+  body{background:var(--bg);color:var(--t2);font-family:var(--body)}
+
+  #app{display:grid;grid-template-columns:400px 1fr;height:100vh}
+
+  /* ── LEFT PANEL ── */
+  .panel{background:var(--s1);border-right:1px solid var(--bd);display:flex;flex-direction:column;overflow:hidden}
+  .panel-header{padding:20px 20px 14px;border-bottom:1px solid var(--bd);flex-shrink:0}
+  .logo{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+  .logo h1{font:700 22px var(--mono);color:var(--t1);letter-spacing:-.5px}
+  .dot{width:9px;height:9px;border-radius:50%;flex-shrink:0;transition:all .3s}
+  .badge{font:600 9px var(--mono);padding:2px 8px;border-radius:4px;transition:all .3s}
+  .sub{font:300 11px var(--mono);color:var(--t5)}
+
+  .input-wrap{padding:16px 20px;border-bottom:1px solid var(--bd);flex-shrink:0}
+  .input-wrap textarea{
+    width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:10px;
+    color:var(--t2);font:14px/1.7 var(--body);padding:12px 14px;resize:none;outline:none;
+    transition:border-color .2s}
+  .input-wrap textarea:focus{border-color:var(--accent)}
+  .input-wrap textarea::placeholder{color:var(--dim)}
+  .input-row{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
+  .hint{font:10px var(--mono);color:var(--dim)}
+  .btn{font:500 12px var(--mono);padding:8px 22px;border:none;border-radius:8px;cursor:pointer;color:#fff;transition:all .2s}
+  .btn-go{background:linear-gradient(135deg,#6366f1,#4f46e5)}
+  .btn-go:hover{filter:brightness(1.15)}
+  .btn-go:disabled{opacity:.35;cursor:default;filter:none}
+  .btn-wait{background:linear-gradient(135deg,#f59e0b,#d97706);cursor:wait}
+
+  .tabs{display:flex;gap:2px;margin:12px 16px 0;background:var(--bg);border-radius:8px;padding:3px;border:1px solid var(--bd)}
+  .tab{flex:1;padding:7px 0;border:none;border-radius:6px;background:transparent;color:var(--t5);font:500 11px var(--mono);cursor:pointer;transition:all .15s}
+  .tab.on{background:var(--bd);color:var(--t2)}
+
+  .entries{flex:1;overflow-y:auto;padding:10px 16px 16px}
+  .entries::-webkit-scrollbar{width:4px}
+  .entries::-webkit-scrollbar-thumb{background:var(--bd);border-radius:4px}
+
+  .card{
+    background:var(--bg);border:1px solid var(--bd);border-radius:12px;
+    padding:14px;margin-bottom:8px;cursor:pointer;transition:all .2s;border-left:3px solid transparent}
+  .card:hover{border-color:#6366f144}
+  .card.sel{border-left-color:var(--accent);background:#6366f10a}
+  .card-top{display:flex;justify-content:space-between;margin-bottom:5px}
+  .card-dom{font:500 12px var(--mono)}
+  .card-time{font:10px var(--mono);color:var(--t5)}
+  .card-text{font-size:13px;color:var(--t3);line-height:1.5;margin-bottom:6px}
+  .card-tags{display:flex;gap:4px;flex-wrap:wrap}
+  .tag{font:9px var(--mono);padding:2px 6px;border-radius:4px}
+
+  /* ── RIGHT PANEL (3D) ── */
+  .viewer{position:relative;background:var(--bg);overflow:hidden}
+  #cv{width:100%;height:100%;display:block}
+
+  .ov-regions{
+    position:absolute;top:20px;right:20px;width:260px;
+    background:var(--s1)ee;backdrop-filter:blur(12px);border:1px solid var(--bd);border-radius:12px;padding:16px;
+    transition:opacity .3s;pointer-events:auto}
+  .ov-title{font:500 10px var(--mono);color:var(--t5);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px}
+  .rr{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .rr-name{font:11px var(--mono);color:var(--t3);width:115px;text-align:right;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .rr-bg{flex:1;height:6px;background:var(--bg);border-radius:3px;overflow:hidden}
+  .rr-bar{height:100%;border-radius:3px;transition:width .8s cubic-bezier(.16,1,.3,1)}
+  .rr-val{font:10px var(--mono);color:var(--t4);width:32px}
+
+  .ov-summary{
+    position:absolute;top:20px;left:20px;max-width:320px;
+    background:var(--s1)ee;backdrop-filter:blur(12px);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;
+    display:none}
+  .ov-summary .s-label{font:500 10px var(--mono);color:var(--t5);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .ov-summary .s-text{font:13px/1.5 var(--body);color:var(--t2)}
+  .ov-summary .s-meta{font:10px var(--mono);color:var(--dim);margin-top:6px}
+
+  .controls{
+    position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+    display:flex;gap:6px;background:var(--s1)ee;backdrop-filter:blur(12px);border:1px solid var(--bd);border-radius:10px;padding:6px 10px}
+  .cb{font:500 11px var(--mono);padding:6px 14px;border:1px solid var(--bd);border-radius:6px;background:transparent;color:var(--t4);cursor:pointer;transition:all .15s}
+  .cb:hover,.cb.on{background:var(--accent);color:#fff;border-color:var(--accent)}
+
+  .load-ov{
+    position:absolute;inset:0;background:var(--bg);display:flex;flex-direction:column;
+    align-items:center;justify-content:center;z-index:10;transition:opacity .5s}
+  .load-ov.hide{opacity:0;pointer-events:none}
+  .spin{width:40px;height:40px;border:3px solid var(--bd);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite}
+  .load-ov p{font:12px var(--mono);color:var(--t4);margin-top:16px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+  .colorbar{
+    position:absolute;bottom:80px;right:20px;width:20px;height:180px;
+    background:var(--s1)ee;backdrop-filter:blur(12px);border:1px solid var(--bd);border-radius:8px;padding:8px 4px;
+    display:flex;flex-direction:column;align-items:center;gap:4px}
+  .colorbar canvas{width:12px;flex:1;border-radius:3px}
+  .colorbar span{font:8px var(--mono);color:var(--t5)}
+
+  /* ── MEMORY TAB ── */
+  .mem-search{padding:12px 0 8px}
+  .mem-search input{
+    width:100%;background:var(--bg);border:1px solid var(--bd);border-radius:8px;
+    color:var(--t2);font:13px var(--body);padding:10px 12px;outline:none;transition:border-color .2s}
+  .mem-search input:focus{border-color:var(--cyan)}
+  .mem-search input::placeholder{color:var(--dim)}
+  .mem-convos{display:flex;gap:6px;margin:8px 0 10px;flex-wrap:wrap}
+  .mem-convo{
+    flex:1;min-width:140px;background:var(--bg);border:1px solid var(--bd);border-radius:8px;padding:10px;font:11px var(--mono)}
+  .mem-convo .mc-speakers{color:var(--cyan);font-weight:600;margin-bottom:4px}
+  .mem-convo .mc-meta{color:var(--t5);font-size:10px}
+  .mem-answer{
+    background:linear-gradient(135deg,#06b6d408,#6366f108);border:1px solid var(--cyan)44;
+    border-radius:10px;padding:14px;margin:10px 0}
+  .mem-answer .ma-label{font:600 10px var(--mono);color:var(--cyan);text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+  .mem-answer .ma-text{font:13px/1.6 var(--body);color:var(--t2)}
+  .mem-answer .ma-meta{font:10px var(--mono);color:var(--dim);margin-top:6px}
+  .mem-card{
+    background:var(--bg);border:1px solid var(--bd);border-radius:10px;padding:12px;margin-bottom:6px;
+    border-left:3px solid var(--cyan);cursor:pointer;transition:all .15s}
+  .mem-card:hover{border-color:var(--cyan)66}
+  .mem-card .mc-head{display:flex;justify-content:space-between;margin-bottom:4px}
+  .mem-card .mc-speaker{font:500 11px var(--mono);color:var(--cyan)}
+  .mem-card .mc-score{font:10px var(--mono);color:var(--t5)}
+  .mem-card .mc-text{font:12px/1.5 var(--body);color:var(--t3)}
+  .mem-card .mc-date{font:10px var(--mono);color:var(--dim);margin-top:4px}
+  .mem-samples{margin-top:10px}
+  .mem-samples .ms-title{font:500 10px var(--mono);color:var(--t5);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+  .mem-sq{
+    font:11px var(--mono);color:var(--t3);padding:6px 10px;background:var(--bg);
+    border:1px solid var(--bd);border-radius:6px;margin-bottom:4px;cursor:pointer;transition:all .15s}
+  .mem-sq:hover{border-color:var(--cyan);color:var(--t2)}
+</style>
+</head>
+<body>
+<div id="app">
+  <!-- LEFT PANEL -->
+  <div class="panel">
+    <div class="panel-header">
+      <div class="logo">
+        <div class="dot" id="dot" style="background:var(--accent);box-shadow:0 0 12px #6366f166"></div>
+        <h1>neurojournal</h1>
+        <span class="badge" id="badge" style="background:#6366f118;color:var(--accent);border:1px solid #6366f144">DEMO</span>
+      </div>
+      <p class="sub">3D emotional activation mapping · meta TRIBE v2 brain encoding</p>
+    </div>
+    <div class="input-wrap">
+      <textarea id="inp" rows="3" placeholder="Write about your day — neural activations will be mapped onto the cortical surface..."></textarea>
+      <div class="input-row">
+        <span class="hint">⌘+Enter to analyze</span>
+        <button class="btn btn-go" id="go" disabled>▶ Analyze</button>
+      </div>
+    </div>
+    <div class="tabs">
+      <button class="tab on" data-v="journal" onclick="setView('journal')">Journal</button>
+      <button class="tab" data-v="memory" onclick="setView('memory')">Memory</button>
+      <button class="tab" data-v="patterns" onclick="setView('patterns')">Patterns</button>
+    </div>
+    <div class="entries" id="list"></div>
+  </div>
+
+  <!-- RIGHT PANEL -->
+  <div class="viewer">
+    <canvas id="cv"></canvas>
+    <div class="load-ov" id="loadov">
+      <div class="spin"></div>
+      <p id="loadtxt">Loading fsaverage5 cortical mesh…</p>
+    </div>
+
+    <div class="ov-summary" id="sumbox">
+      <div class="s-label">Analysis</div>
+      <div class="s-text" id="sumtext"></div>
+      <div class="s-meta" id="summeta"></div>
+    </div>
+
+    <div class="ov-regions" id="rpanel" style="opacity:0">
+      <div class="ov-title">Cortical Activation</div>
+      <div id="rbars"></div>
+    </div>
+
+    <div class="colorbar" id="cbar" style="opacity:0">
+      <span>1.0</span>
+      <canvas id="cbar-cv"></canvas>
+      <span>0.0</span>
+    </div>
+
+    <div class="controls">
+      <button class="cb on" data-m="inflated" onclick="setMesh('inflated')">Inflated</button>
+      <button class="cb" data-m="pial" onclick="setMesh('pial')">Pial</button>
+      <button class="cb" onclick="resetCam()">Reset</button>
+      <button class="cb" id="arb" onclick="togRot()">Rotate</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">{"imports":{"three":"https://esm.sh/three@0.170.0","three/addons/":"https://esm.sh/three@0.170.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+
+const API='http://localhost:8420';
+const RC={
+  prefrontal_cortex:'#3b82f6',anterior_cingulate:'#e11d48',insula:'#ec4899',
+  temporal_lobe:'#7c3aed',amygdala:'#ef4444',hippocampus:'#d97706',
+  nucleus_accumbens:'#22c55e',parietal_lobe:'#0ea5e9',occipital_lobe:'#a855f7',motor_cortex:'#059669'
+};
+const BR={
+  prefrontal_cortex:{label:"Prefrontal Cortex",vr:[[0,1200]],fn:["reasoning","planning","calm"]},
+  anterior_cingulate:{label:"Anterior Cingulate",vr:[[1200,1800]],fn:["conflict","sadness"]},
+  insula:{label:"Insula",vr:[[1800,2400]],fn:["empathy","self-awareness"]},
+  temporal_lobe:{label:"Temporal Lobe",vr:[[2400,4200]],fn:["language","comprehension"]},
+  amygdala:{label:"Amygdala",vr:[[4200,4800]],fn:["fear","anxiety","anger"]},
+  hippocampus:{label:"Hippocampus",vr:[[4800,5400]],fn:["memory","nostalgia"]},
+  nucleus_accumbens:{label:"Nucleus Accumbens",vr:[[5400,5800]],fn:["joy","reward","excitement"]},
+  parietal_lobe:{label:"Parietal Lobe",vr:[[5800,7800]],fn:["attention","spatial"]},
+  occipital_lobe:{label:"Visual Cortex",vr:[[7800,9600]],fn:["imagery","visualization"]},
+  motor_cortex:{label:"Motor Cortex",vr:[[9600,10484]],fn:["action","energy"]},
+};
+
+let md,scene,cam,ren,ctrl,bL,bR,curMesh='inflated',curAct=null,aRot=false;
+let backend={status:'offline',model_mode:'demo'};
+let entries=[],selEntry=null,curView='journal';
+let memConvos=[],memResults=null,memQuerying=false,sampleQuestions=[];
+
+// ── Color: "inferno" inspired ──
+function actColor(v){
+  const t=Math.max(0,Math.min(1,v));
+  if(t<.2)return new THREE.Color(.05+t*1.5,.02+t*.5,.12+t*2);
+  if(t<.45)return new THREE.Color(.35+(t-.2)*2.4,.12+(t-.2)*1.2,.52-(t-.2)*1.6);
+  if(t<.7)return new THREE.Color(.95,(t-.45)*3.6,.08);
+  const s=(t-.7)/.3;return new THREE.Color(1,.9+s*.1,.08+s*.85);
+}
+const baseC=new THREE.Color(.48,.46,.52);
+
+// ── Three.js ──
+function initScene(){
+  const cv=document.getElementById('cv');
+  ren=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+  ren.setPixelRatio(Math.min(devicePixelRatio,2));
+  ren.setClearColor(0x020617);
+  ren.toneMapping=THREE.ACESFilmicToneMapping;
+  scene=new THREE.Scene();
+  scene.fog=new THREE.FogExp2(0x020617,.002);
+  cam=new THREE.PerspectiveCamera(42,cv.clientWidth/cv.clientHeight,1,2000);
+  cam.position.set(0,20,210);
+  ctrl=new OrbitControls(cam,cv);
+  ctrl.enableDamping=true;ctrl.dampingFactor=.06;ctrl.minDistance=100;ctrl.maxDistance=400;ctrl.target.set(0,10,0);
+  scene.add(new THREE.AmbientLight(0x445566,.7));
+  const k=new THREE.DirectionalLight(0xffffff,1.3);k.position.set(60,80,100);scene.add(k);
+  const f=new THREE.DirectionalLight(0x6366f1,.35);f.position.set(-80,30,-60);scene.add(f);
+  const r=new THREE.DirectionalLight(0x06b6d4,.3);r.position.set(0,-50,-80);scene.add(r);
+  const g=new THREE.GridHelper(400,40,0x1e293b,0x0f172a);g.position.y=-85;scene.add(g);
+  onRS();window.addEventListener('resize',onRS);anim();
+}
+function onRS(){const c=ren.domElement,p=c.parentElement;ren.setSize(p.clientWidth,p.clientHeight);cam.aspect=p.clientWidth/p.clientHeight;cam.updateProjectionMatrix()}
+function anim(){requestAnimationFrame(anim);if(aRot&&bL){bL.rotation.y+=.003;bR.rotation.y+=.003}ctrl.update();ren.render(scene,cam)}
+
+function mkMesh(verts,faces){
+  const g=new THREE.BufferGeometry();
+  g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(verts.flat()),3));
+  const idx=[];for(const f of faces)idx.push(f[0],f[1],f[2]);
+  g.setIndex(idx);g.computeVertexNormals();
+  const c=new Float32Array(verts.length*3);
+  for(let i=0;i<verts.length;i++){c[i*3]=baseC.r;c[i*3+1]=baseC.g;c[i*3+2]=baseC.b}
+  g.setAttribute('color',new THREE.BufferAttribute(c,3));
+  return new THREE.Mesh(g,new THREE.MeshStandardMaterial({vertexColors:true,roughness:.5,metalness:.08,side:THREE.DoubleSide}));
+}
+
+function loadInto(type){
+  if(!md)return;
+  if(bL){scene.remove(bL);scene.remove(bR)}
+  const lv=type==='inflated'?md.left.inflated:md.left.vertices;
+  const rv=type==='inflated'?md.right.inflated:md.right.vertices;
+  bL=mkMesh(lv,md.left.faces);bR=mkMesh(rv,md.right.faces);
+  const gap=type==='inflated'?2:0;bL.position.x=-gap;bR.position.x=gap;
+  scene.add(bL);scene.add(bR);
+  if(curAct)paintVerts(curAct);
+}
+
+function paintVerts(va){
+  curAct=va;if(!bL||!bR)return;
+  const nL=md.left.vertices.length,tot=va.length;
+  const lc=bL.geometry.attributes.color;
+  for(let i=0;i<nL&&i<tot;i++){
+    const a=va[i];if(a>.12){const c=actColor(a);lc.setXYZ(i,c.r,c.g,c.b)}
+    else{const s=.3+a*.6;lc.setXYZ(i,s*.55,s*.52,s*.58)}
+  }
+  lc.needsUpdate=true;
+  const rc=bR.geometry.attributes.color,nR=md.right.vertices.length;
+  for(let i=0;i<nR;i++){
+    const gi=i+nL,a=gi<tot?va[gi]:0;
+    if(a>.12){const c=actColor(a);rc.setXYZ(i,c.r,c.g,c.b)}
+    else{const s=.3+a*.6;rc.setXYZ(i,s*.55,s*.52,s*.58)}
+  }
+  rc.needsUpdate=true;
+}
+
+function regionToVerts(regions){
+  const n=20484,v=new Array(n).fill(0);
+  for(const[k,info]of Object.entries(BR)){
+    const a=regions[k]?.activation||0;if(a<.05)continue;
+    for(const[st,en]of info.vr){
+      const s0=Math.floor(st*n/10484),s1=Math.min(Math.floor(en*n/10484),n),mid=(s0+s1)/2,half=(s1-s0)/2;
+      for(let i=s0;i<s1;i++){
+        const d=Math.abs(i-mid)/half,fo=Math.max(0,1-d*d);
+        v[i]=Math.max(v[i],a*(.4+.6*fo)+(Math.random()-.5)*.06*a);
+        v[i]=Math.max(0,Math.min(1,v[i]));
+      }
+    }
+  }
+  return v;
+}
+
+function clearPaint(){
+  if(!bL||!bR)return;curAct=null;
+  [bL,bR].forEach(m=>{const c=m.geometry.attributes.color;for(let i=0;i<c.count;i++)c.setXYZ(i,baseC.r,baseC.g,baseC.b);c.needsUpdate=true});
+}
+
+// ── UI ──
+function updRegPanel(regions){
+  const p=document.getElementById('rpanel'),b=document.getElementById('rbars');
+  if(!regions){p.style.opacity=0;return}p.style.opacity=1;
+  const sorted=Object.entries(regions).map(([k,v])=>({key:k,...v})).sort((a,b)=>(b.activation||0)-(a.activation||0));
+  b.innerHTML=sorted.map(r=>{
+    const pct=Math.round((r.activation||0)*100),c=RC[r.key]||'#6366f1';
+    return`<div class="rr"><span class="rr-name">${r.label}</span><div class="rr-bg"><div class="rr-bar" style="width:${pct}%;background:${c}"></div></div><span class="rr-val">${pct}%</span></div>`;
+  }).join('');
+}
+
+function updSummary(entry){
+  const box=document.getElementById('sumbox');
+  if(!entry?.summary&&!entry?.dominant){box.style.display='none';return}
+  box.style.display='block';
+  document.getElementById('sumtext').textContent=entry.summary||'';
+  const parts=[];
+  if(entry.dominant)parts.push(`Dominant: ${entry.dominant}`);
+  if(entry.mode==='tribe')parts.push('TRIBE v2');
+  else if(entry.mode==='fallback')parts.push('API mode');
+  else parts.push('Demo mode');
+  if(entry.processing_time_ms)parts.push(`${Math.round(entry.processing_time_ms)}ms`);
+  if(entry.n_vertices)parts.push(`${entry.n_vertices} vertices`);
+  document.getElementById('summeta').textContent=parts.join(' · ');
+}
+
+function fmtTime(ts){const d=Date.now()-ts;if(d<3600000)return`${Math.floor(d/60000)}m ago`;if(d<86400000)return`${Math.floor(d/3600000)}h ago`;return`${Math.floor(d/86400000)}d ago`}
+
+function renderList(){
+  const el=document.getElementById('list');
+  if(curView==='patterns'){renderPatterns(el);return}
+  if(curView==='memory'){renderMemory(el);return}
+  el.innerHTML=entries.map((e,i)=>{
+    const sel=selEntry?.id===e.id;
+    const topR=e.regions?Object.entries(e.regions).sort((a,b)=>(b[1].activation||0)-(a[1].activation||0)):[];
+    const topC=topR[0]?RC[topR[0][0]]||'#6366f1':'#6366f1';
+    const mTag=e.mode==='tribe'?'<span class="tag" style="background:#22c55e18;color:#22c55e">TRIBE</span>':e.mode==='fallback'?'<span class="tag" style="background:#f59e0b18;color:#f59e0b">API</span>':'';
+    const txt=e.text.length>130?e.text.slice(0,130)+'…':e.text;
+    return`<div class="card${sel?' sel':''}" onclick="window._sel(${i})" style="${sel?'border-left-color:'+topC:''}">
+      <div class="card-top"><div style="display:flex;gap:6px;align-items:center"><span class="card-dom" style="color:${topC}">${e.dominant||e.summary||''}</span>${mTag}</div><span class="card-time">${fmtTime(e.timestamp)}</span></div>
+      <p class="card-text">${txt}</p>
+      <div class="card-tags">${topR.slice(0,4).map(([k,v])=>{const c=RC[k]||'#6366f1';return`<span class="tag" style="background:${c}18;color:${c}">${v.label} ${Math.round((v.activation||0)*100)}%</span>`}).join('')}</div>
+    </div>`;
+  }).join('');
+}
+
+function renderPatterns(el){
+  if(entries.length<2){el.innerHTML='<div style="padding:40px;text-align:center;color:var(--t5)">Add more entries to detect neural patterns.</div>';return}
+  const totals={};
+  entries.forEach(e=>{if(!e.regions)return;Object.entries(e.regions).forEach(([k,v])=>{if(!totals[k])totals[k]={t:0,n:0,l:v.label};totals[k].t+=v.activation||0;totals[k].n++})});
+  let topK=null,topA=0;
+  for(const[k,v]of Object.entries(totals)){const a=v.t/entries.length;if(a>topA){topA=a;topK=k}}
+  const pats=[];
+  if(topK&&topA>.25)pats.push({title:`${totals[topK].l} is your baseline`,desc:`Across ${entries.length} entries, this region averages ${(topA*100).toFixed(0)}% activation.`,color:RC[topK]||'#6366f1',icon:'◎'});
+  if(entries.length>=3){
+    const half=Math.ceil(entries.length/2),rec=entries.slice(0,half),old=entries.slice(half);
+    let bK=null,bV=0;
+    for(const k of Object.keys(totals)){const ra=rec.reduce((s,e)=>s+(e.regions?.[k]?.activation||0),0)/rec.length;const oa=old.reduce((s,e)=>s+(e.regions?.[k]?.activation||0),0)/old.length;const d=ra-oa;if(d>bV){bV=d;bK=k}}
+    if(bK&&bV>.08)pats.push({title:`Rising ${totals[bK].l}`,desc:`Up ${(bV*100).toFixed(0)}% in recent entries.`,color:RC[bK]||'#6366f1',icon:'↗'});
+  }
+  const coAct={};
+  entries.forEach(e=>{if(!e.regions)return;const act=Object.entries(e.regions).filter(([_,v])=>(v.activation||0)>.5);for(let i=0;i<act.length;i++)for(let j=i+1;j<act.length;j++){const p=[act[i][1].label,act[j][1].label].sort().join(' ↔ ');coAct[p]=(coAct[p]||0)+1}});
+  const topPair=Object.entries(coAct).sort((a,b)=>b[1]-a[1])[0];
+  if(topPair&&topPair[1]>=2)pats.push({title:'Neural coupling',desc:`${topPair[0]} co-activate in ${topPair[1]}/${entries.length} entries.`,color:'#06b6d4',icon:'⟷'});
+  el.innerHTML=pats.length?pats.map(p=>`<div style="background:${p.color}0a;border:1px solid ${p.color}33;border-radius:10px;padding:12px 14px;margin-bottom:8px"><div style="font:600 12px var(--mono);color:${p.color};margin-bottom:4px">${p.icon} ${p.title}</div><div style="font-size:11px;color:var(--t3);line-height:1.5">${p.desc}</div></div>`).join(''):'<div style="padding:40px;text-align:center;color:var(--t5)">Add more entries to detect patterns.</div>';
+}
+
+// ── Memory View ──
+function renderMemory(el){
+  const convosHtml=memConvos.length?memConvos.map(c=>
+    `<div class="mem-convo"><div class="mc-speakers">${c.speakers.join(' & ')}</div><div class="mc-meta">${c.num_sessions} sessions · ${c.num_memories} memories</div></div>`
+  ).join(''):'<div style="color:var(--t5);font:11px var(--mono)">No conversations loaded. Start the backend with memories ingested.</div>';
+
+  let resultsHtml='';
+  if(memQuerying){
+    resultsHtml='<div style="padding:30px;text-align:center"><div class="spin" style="width:24px;height:24px;margin:0 auto"></div><p style="font:11px var(--mono);color:var(--t4);margin-top:10px">Retrieving memories & generating answer...</p></div>';
+  }else if(memResults){
+    const ansHtml=`<div class="mem-answer"><div class="ma-label">Generated Answer</div><div class="ma-text">${memResults.generated_answer}</div><div class="ma-meta">${memResults.retrieved_memories.length} memories retrieved · ${Math.round(memResults.processing_time_ms)}ms${memResults.tribe?' · brain activations mapped':''}</div></div>`;
+    const memsHtml=memResults.retrieved_memories.map((m,i)=>
+      `<div class="mem-card" onclick="window._memClick(${i})"><div class="mc-head"><span class="mc-speaker">${m.speaker}</span><span class="mc-score">${(m.score*100).toFixed(0)}% match</span></div><div class="mc-text">${m.text}</div><div class="mc-date">Session ${m.session} · ${m.date} · ${m.type==='observation'?'Observation':'Event'}</div></div>`
+    ).join('');
+    resultsHtml=ansHtml+'<div class="ov-title" style="margin-top:12px">Retrieved Memories</div>'+memsHtml;
+  }
+
+  const samplesHtml=sampleQuestions.length?`<div class="mem-samples"><div class="ms-title">Try a question</div>${sampleQuestions.slice(0,8).map((q,i)=>`<div class="mem-sq" onclick="window._memSample(${i})">${q.question}</div>`).join('')}</div>`:'';
+
+  el.innerHTML=`
+    <div class="mem-search"><input id="mem-inp" type="text" placeholder="Ask about Caroline, Melanie, Jon, or Gina..." onkeydown="if(event.key==='Enter')window._memQuery()"></div>
+    <div class="mem-convos">${convosHtml}</div>
+    ${resultsHtml}
+    ${!memResults?samplesHtml:''}
+  `;
+}
+
+async function memoryQuery(query){
+  memQuerying=true;memResults=null;renderList();
+  try{
+    if(backend.status==='ok'){
+      const r=await fetch(`${API}/memory/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query,top_k:5,run_tribe:true})});
+      memResults=await r.json();
+    }else{
+      memResults=demoMemoryQuery(query);
+    }
+    if(memResults.tribe){
+      const t=memResults.tribe;
+      updRegPanel(t.regions);
+      updSummary({summary:memResults.generated_answer.slice(0,80),dominant:'memory retrieval',mode:t.mode,processing_time_ms:memResults.processing_time_ms,n_vertices:t.n_vertices});
+      if(t.vertex_activations)paintVerts(t.vertex_activations);
+      else if(t.regions)paintVerts(regionToVerts(t.regions));
+    }
+  }catch(e){console.error('Memory query failed:',e);memResults={generated_answer:'Query failed: '+e.message,retrieved_memories:[],processing_time_ms:0}}
+  memQuerying=false;renderList();
+}
+
+function demoMemoryQuery(query){
+  const lc=query.toLowerCase();
+  const demoMems=[
+    {text:'Caroline attended an LGBTQ support group and found it powerful and inspiring.',speaker:'Caroline',session:1,date:'8 May, 2023',type:'observation',score:.8},
+    {text:'Caroline is keen on counseling or working in mental health to support others.',speaker:'Caroline',session:1,date:'8 May, 2023',type:'observation',score:.65},
+    {text:'Jon lost his job as a banker and began planning his own business.',speaker:'Jon',session:1,date:'20 January, 2023',type:'event_summary',score:.5},
+    {text:'Melanie has pets including another cat named Bailey.',speaker:'Melanie',session:13,date:'23 August, 2023',type:'observation',score:.45},
+    {text:'Gina lost her job at Door Dash and started exploring new opportunities.',speaker:'Gina',session:1,date:'20 January, 2023',type:'event_summary',score:.3},
+  ];
+  const regions={};
+  for(const[k,info]of Object.entries(BR)){
+    let a=.1+Math.random()*.2;
+    if(k==='hippocampus')a+=.4;
+    if(k==='temporal_lobe')a+=.35;
+    if(k==='prefrontal_cortex')a+=.25;
+    regions[k]={label:info.label,activation:Math.min(1,a)};
+  }
+  return{
+    query,retrieved_memories:demoMems.slice(0,5),
+    generated_answer:`Based on the retrieved memories: ${demoMems[0].text}`,
+    tribe:{mode:'demo',regions},processing_time_ms:120
+  };
+}
+
+async function loadMemoryMeta(){
+  try{
+    const r=await fetch(`${API}/memory/conversations`);
+    if(r.ok){const d=await r.json();memConvos=d.conversations||[]}
+  }catch{}
+  try{
+    const r=await fetch(`${API}/memory/sample-questions`);
+    if(r.ok){const d=await r.json();sampleQuestions=(d.questions||[]).sort(()=>Math.random()-.5)}
+  }catch{}
+}
+
+// ── Globals for inline onclick ──
+window._sel=function(i){
+  selEntry=entries[i];renderList();updRegPanel(selEntry.regions);updSummary(selEntry);
+  if(selEntry.vertex_activations)paintVerts(selEntry.vertex_activations);
+  else if(selEntry.regions)paintVerts(regionToVerts(selEntry.regions));
+};
+window.setMesh=function(t){curMesh=t;document.querySelectorAll('.cb[data-m]').forEach(b=>b.classList.toggle('on',b.dataset.m===t));loadInto(t)};
+window.resetCam=function(){cam.position.set(0,20,210);ctrl.target.set(0,10,0);if(bL){bL.rotation.y=0;bR.rotation.y=0}};
+window.togRot=function(){aRot=!aRot;document.getElementById('arb').classList.toggle('on',aRot)};
+window.setView=function(v){curView=v;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.v===v));renderList()};
+window._memQuery=function(){const inp=document.getElementById('mem-inp');if(inp&&inp.value.trim())memoryQuery(inp.value.trim())};
+window._memSample=function(i){if(sampleQuestions[i]){const q=sampleQuestions[i].question;memoryQuery(q)}};
+window._memClick=function(i){
+  if(!memResults||!memResults.retrieved_memories[i])return;
+  const m=memResults.retrieved_memories[i];
+  updSummary({summary:m.text,dominant:m.speaker,mode:'memory',processing_time_ms:0});
+};
+
+// ── Colorbar ──
+function drawColorbar(){
+  const cv=document.getElementById('cbar-cv');
+  cv.width=12;cv.height=160;const ctx=cv.getContext('2d');
+  for(let y=0;y<160;y++){const v=1-y/159;const c=actColor(v);ctx.fillStyle=`rgb(${c.r*255|0},${c.g*255|0},${c.b*255|0})`;ctx.fillRect(0,y,12,1)}
+}
+
+// ── Sample data ──
+const SAMPLES=[
+  {id:'s1',text:'Had an amazing breakthrough at work today. Finally figured out the architecture for the agent system.',timestamp:Date.now()-86400000*3,summary:'Work breakthrough — reward and executive function surge',dominant:'joy',mode:'sample',
+    regions:{prefrontal_cortex:{label:'Prefrontal Cortex',activation:.72},nucleus_accumbens:{label:'Nucleus Accumbens',activation:.91},temporal_lobe:{label:'Temporal Lobe',activation:.53},parietal_lobe:{label:'Parietal Lobe',activation:.41},motor_cortex:{label:'Motor Cortex',activation:.48},anterior_cingulate:{label:'Anterior Cingulate',activation:.33},insula:{label:'Insula',activation:.22},amygdala:{label:'Amygdala',activation:.12},hippocampus:{label:'Hippocampus',activation:.35},occipital_lobe:{label:'Visual Cortex',activation:.38}}},
+  {id:'s2',text:"Couldn't sleep last night. Kept thinking about whether I'm making the right career moves.",timestamp:Date.now()-86400000*2,summary:'Career anxiety — threat detection and rumination loop',dominant:'anxiety',mode:'sample',
+    regions:{amygdala:{label:'Amygdala',activation:.87},anterior_cingulate:{label:'Anterior Cingulate',activation:.72},insula:{label:'Insula',activation:.79},prefrontal_cortex:{label:'Prefrontal Cortex',activation:.41},temporal_lobe:{label:'Temporal Lobe',activation:.33},hippocampus:{label:'Hippocampus',activation:.44},nucleus_accumbens:{label:'Nucleus Accumbens',activation:.09},parietal_lobe:{label:'Parietal Lobe',activation:.18},occipital_lobe:{label:'Visual Cortex',activation:.14},motor_cortex:{label:'Motor Cortex',activation:.31}}},
+  {id:'s3',text:'Long walk in the park with an old friend. Talked about college days and laughed about old times.',timestamp:Date.now()-86400000,summary:'Nostalgic walk — memory retrieval with positive valence',dominant:'nostalgia',mode:'sample',
+    regions:{hippocampus:{label:'Hippocampus',activation:.92},temporal_lobe:{label:'Temporal Lobe',activation:.81},nucleus_accumbens:{label:'Nucleus Accumbens',activation:.63},insula:{label:'Insula',activation:.58},prefrontal_cortex:{label:'Prefrontal Cortex',activation:.47},anterior_cingulate:{label:'Anterior Cingulate',activation:.38},amygdala:{label:'Amygdala',activation:.19},parietal_lobe:{label:'Parietal Lobe',activation:.28},occipital_lobe:{label:'Visual Cortex',activation:.51},motor_cortex:{label:'Motor Cortex',activation:.42}}},
+];
+
+// ── Analyze ──
+async function analyze(text){
+  const btn=document.getElementById('go');
+  btn.className='btn btn-wait';btn.textContent='◎ Scanning neural activations...';btn.disabled=true;
+  try{
+    let result;
+    if(backend.status==='ok'){
+      const r=await fetch(`${API}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+      result=await r.json();
+    }else{result=demoResult(text)}
+    const entry={id:'e-'+Date.now(),text,timestamp:Date.now(),...result};
+    entries.unshift(entry);selEntry=entry;renderList();updRegPanel(entry.regions);updSummary(entry);
+    if(entry.vertex_activations)paintVerts(entry.vertex_activations);
+    else if(entry.regions)paintVerts(regionToVerts(entry.regions));
+  }catch(e){console.error(e)}
+  btn.className='btn btn-go';btn.textContent='▶ Analyze';btn.disabled=false;
+  document.getElementById('inp').value='';
+}
+
+function demoResult(text){
+  const lc=text.toLowerCase(),regions={};
+  const kw={nucleus_accumbens:['happy','joy','amazing','love','great','excited','breakthrough','laugh'],amygdala:['sad','anxious','worry','fear','angry','scared','couldn\'t sleep','stress'],hippocampus:['remember','memory','old','nostalgia','college','childhood','past'],prefrontal_cortex:['think','plan','decide','work','analyze','figure','architecture'],temporal_lobe:['talk','said','language','read','listen','word','friend'],insula:['feel','empathy','disgust','aware','emotion'],motor_cortex:['walk','run','move','exercise','action','energy'],occipital_lobe:['see','watch','look','imagine','visual','beautiful','color'],parietal_lobe:['attention','focus','spatial','body','touch'],anterior_cingulate:['conflict','mistake','error','wrong','struggle','whether']};
+  for(const[k,info]of Object.entries(BR)){
+    let a=.08+Math.random()*.2;
+    if(k==='temporal_lobe')a+=.25;
+    const words=kw[k]||[];
+    for(const w of words)if(lc.includes(w))a+=.2;
+    regions[k]={label:info.label,activation:Math.min(1,a)};
+  }
+  const top=Object.entries(regions).sort((a,b)=>b[1].activation-a[1].activation);
+  return{mode:'demo',regions,summary:text.slice(0,60)+'...',dominant:top[0][1].label};
+}
+
+// ── Health ──
+async function checkHealth(){
+  try{const r=await fetch(`${API}/health`);backend=await r.json()}
+  catch{backend={status:'offline',model_mode:'demo'}}
+  const c=backend.model_mode==='tribe'?'#22c55e':backend.model_mode==='fallback'?'#f59e0b':'#6366f1';
+  const l=backend.model_mode==='tribe'?'TRIBE v2 LIVE':backend.model_mode==='fallback'?'API MODE':'DEMO';
+  const dot=document.getElementById('dot'),badge=document.getElementById('badge');
+  dot.style.background=c;dot.style.boxShadow=`0 0 12px ${c}66`;
+  badge.textContent=l;badge.style.background=`${c}18`;badge.style.color=c;badge.style.borderColor=`${c}44`;
+  if(backend.model_mode==='tribe')dot.style.animation='pulse 2s infinite';
+}
+
+// ── Init ──
+async function init(){
+  initScene();drawColorbar();
+  entries=[...SAMPLES];selEntry=entries[0];renderList();
+
+  try{
+    let r;try{r=await fetch(`${API}/brain_mesh.json`);if(!r.ok)throw 0}catch{r=await fetch('./brain_mesh.json')}
+    md=await r.json();
+    document.getElementById('loadtxt').textContent='Building cortical surface…';
+    await new Promise(r=>setTimeout(r,50));
+    loadInto(curMesh);
+    if(selEntry.regions){paintVerts(regionToVerts(selEntry.regions));updRegPanel(selEntry.regions);updSummary(selEntry)}
+    document.getElementById('loadov').classList.add('hide');
+    document.getElementById('rpanel').style.opacity=1;
+    document.getElementById('cbar').style.opacity=1;
+  }catch(e){document.getElementById('loadtxt').textContent='Error: '+e.message;console.error(e)}
+
+  await checkHealth();setInterval(checkHealth,8000);
+  loadMemoryMeta();
+  const inp=document.getElementById('inp'),btn=document.getElementById('go');
+  inp.addEventListener('input',()=>btn.disabled=!inp.value.trim());
+  inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)&&inp.value.trim())analyze(inp.value.trim())});
+  btn.addEventListener('click',()=>{if(inp.value.trim())analyze(inp.value.trim())});
+}
+init();
+</script>
+</body>
+</html>
