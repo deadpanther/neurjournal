@@ -1,102 +1,146 @@
-# NeuroJournal — Emotional Activation Mapping with Meta TRIBE v2
+# NeurJournal — Real-Time Brain Activation Mapping
 
-> Built for Founders Inc Night Hacks
+> Built at Founders Inc Night Hacks
 
-**What it does:** Journal entries → TRIBE v2 brain encoding → cortical activation map → emotional pattern detection over time.
+**NeurJournal** maps text to real brain activations using Meta's **TRIBE v2** deep multimodal brain encoding model. A therapist asks questions about a patient's memories, and the app retrieves relevant memories, generates answers, and visualizes predicted fMRI cortical activity on an interactive 3D brain — in real time.
 
 ## Architecture
 
 ```
-┌─────────────────┐     POST /analyze      ┌──────────────────────┐
-│   React Frontend │ ──────────────────────→ │  FastAPI Backend      │
-│   (neurojournal)  │ ←────────────────────── │                      │
-│                   │    region activations   │  ┌────────────────┐  │
-│  • Brain viz      │                         │  │  TRIBE v2       │  │
-│  • Timeline       │                         │  │  (text→fMRI)   │  │
-│  • Patterns       │                         │  │                │  │
-└─────────────────┘                         │  │  LLaMA 3.2-3B  │  │
-                                             │  │  + Brain Head   │  │
-                                             │  └────────────────┘  │
-                                             │         │            │
-                                             │  ┌──────▼─────────┐  │
-                                             │  │ Anthropic API   │  │
-                                             │  │ (summary/label) │  │
-                                             │  └────────────────┘  │
-                                             └──────────────────────┘
+┌──────────────────────┐                    ┌──────────────────────────┐
+│   Browser (index.html)│   POST /analyze    │    FastAPI Backend        │
+│                       │ ──────────────────→│                          │
+│  Three.js 3D Brain    │   POST /memory/    │  ┌──────────────────┐   │
+│  fsaverage5 20k verts │    query           │  │   TRIBE v2        │   │
+│                       │ ←──────────────────│  │   Wav2Vec-BERT    │   │
+│  Tabs:                │  vertex activations│  │   (audio → fMRI)  │   │
+│  • Journal            │  + regions + answer│  └──────────────────┘   │
+│  • Memory             │                    │           │              │
+│  • Timeline           │                    │  ┌────────▼─────────┐   │
+│  • Patterns           │                    │  │  OpenAI API       │   │
+│                       │                    │  │  Whisper + GPT-4o │   │
+└──────────────────────┘                    │  └──────────────────┘   │
+                                             │           │              │
+                                             │  ┌────────▼─────────┐   │
+                                             │  │  Memory Store     │   │
+                                             │  │  TF-IDF + 407     │   │
+                                             │  │  LoCoMo memories  │   │
+                                             │  └──────────────────┘   │
+                                             └──────────────────────────┘
 ```
 
-## Quick Start (M4 Pro Mac)
+## How It Works
 
-### 1. Setup (run once, ~10 min)
+1. **Memory ingestion** — 2 conversations from the LoCoMo dataset (Caroline & Melanie, Jon & Gina) are parsed into 407 searchable memory records
+2. **Therapist query** — e.g. *"Jon, how are you managing stress these days?"*
+3. **Memory retrieval** — TF-IDF search with speaker-aware boosting returns the top 5 relevant memories
+4. **Answer generation** — GPT-4o-mini synthesizes a grounded answer from the retrieved memories
+5. **Brain encoding** — TRIBE v2 converts the answer to speech (gTTS), transcribes it (OpenAI Whisper), extracts audio features (Wav2Vec-BERT), and predicts fMRI activity across 20,484 cortical vertices
+6. **Visualization** — Activations are painted onto an interactive 3D brain (Three.js + fsaverage5 mesh) with an inferno colormap
+7. **Timeline** — Each query's activations are stored, enabling progression tracking with sparkline charts, smooth brain animation playback, and delta badges showing which regions changed
+
+## Features
+
+- **3D Brain Visualization** — Interactive fsaverage5 cortical mesh with orbit controls, inflated/pial views, auto-rotation
+- **Memory Tab** — Query patient memories, view retrieved evidence, get AI-generated answers with TRIBE brain activations
+- **Query History** — Click any past query to instantly restore its brain state
+- **Timeline Tab** — Sparkline chart showing activation progression across queries, with playback controls to animate the brain through the session
+- **Delta Badges** — When stepping through the timeline, floating indicators show which regions increased or decreased
+- **Follow-up Suggestions** — Context-aware follow-up questions appear after each query to guide the therapist
+- **Patterns Tab** — Detects neural coupling, rising activations, and baseline patterns across journal entries
+- **Journal Tab** — Free-text emotional journaling with real-time TRIBE activation mapping
+
+## Quick Start
+
+### 1. Setup
 
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-This installs PyTorch, TRIBE v2, and all dependencies. First run downloads ~10GB of models.
+Downloads and installs TRIBE v2, PyTorch, and all dependencies (~10 min first run).
 
 **Prerequisites:**
-- HuggingFace account + token (for LLaMA 3.2-3B access)
-- Accept LLaMA license: https://huggingface.co/meta-llama/Llama-3.2-3B
-- Anthropic API key (for emotion labeling)
+- Python 3.10+
+- HuggingFace account + token (`huggingface-cli login`)
+- OpenAI API key (for Whisper transcription + GPT-4o-mini)
 
-### 2. Run Backend
+### 2. Configure
+
+```bash
+# Create .env in project root
+OPENAI_API_KEY=sk-...
+```
+
+### 3. Ingest Memories
 
 ```bash
 source .venv/bin/activate
-export ANTHROPIC_API_KEY=sk-ant-...
+python backend/ingest_locomo.py
+```
+
+Downloads the LoCoMo dataset and generates `backend/memories.json` with 407 memories.
+
+### 4. Run
+
+```bash
+source .venv/bin/activate
 python backend/server.py
 ```
 
-Server starts on `http://localhost:8420`. Check health: `curl localhost:8420/health`
+Open `http://localhost:8420` in your browser.
 
-### 3. Open Frontend
-
-Open the `neurojournal.jsx` artifact in Claude.ai, or serve it locally.
-
-The frontend auto-detects the backend:
-- **Green "TRIBE v2 LIVE"** → Running real brain encoding
-- **Yellow "API MODE"** → Backend running, TRIBE failed to load, using Anthropic
-- **Purple "BROWSER"** → No backend, direct Anthropic API from browser
-
-## How TRIBE v2 Integration Works
-
-1. **Text input** → saved to temp `.txt` file
-2. **gTTS** converts text to speech audio
-3. **Whisper** transcribes audio back to word-level events with timestamps
-4. **LLaMA 3.2-3B** extracts text features (contextual embeddings at layers 0.5, 0.75, 1.0)
-5. **TRIBE v2 Transformer** maps features to fsaverage5 cortical mesh (~20,484 vertices)
-6. **ROI mapping** aggregates vertex activations into 10 named brain regions
-7. **Anthropic API** provides human-readable emotion labels and summary
+Status indicators:
+- **Green "TRIBE v2 LIVE"** — Real brain encoding active
+- **Yellow "API MODE"** — Backend running, TRIBE not loaded, using LLM fallback
+- **Purple "TRIBE v2"** — No backend, demo mode with simulated activations
 
 ## Files
 
 ```
 neurojournal/
-├── setup.sh              # One-command setup
+├── index.html                  # Full frontend (Three.js + UI)
+├── brain_mesh.json             # fsaverage5 cortical mesh data
+├── setup.sh                    # One-command environment setup
+├── .env                        # API keys (not committed)
 ├── backend/
-│   ├── server.py          # FastAPI + TRIBE v2 inference
-│   └── requirements.txt   # Python deps
-├── neurojournal.jsx       # React frontend (Claude artifact)
+│   ├── server.py               # FastAPI server + TRIBE v2 inference
+│   ├── memory_store.py         # TF-IDF memory search with speaker boosting
+│   ├── ingest_locomo.py        # LoCoMo dataset parser
+│   └── memories.json           # 407 ingested memory records
 └── README.md
 ```
 
-## Demo Script (for pitch)
+## TRIBE v2 Pipeline
 
-1. Show app with pre-seeded entries, click through brain activations
-2. Type a new journal entry live → watch brain regions light up
-3. Switch to Patterns tab → show detected emotional trends
-4. Point out the green "TRIBE v2 LIVE" badge = real brain encoding
-5. Pitch: "Every journal entry gets a neuroscience-grade activation fingerprint"
+```
+Text input
+  → gTTS (text-to-speech)
+  → OpenAI Whisper (word-level timestamps → .tsv cache)
+  → Wav2Vec-BERT (audio embeddings on CPU)
+  → TRIBE v2 Transformer (multimodal → cortical prediction)
+  → 20,484 vertex activations on fsaverage5
+  → 10 ROI aggregations (Prefrontal, Amygdala, Hippocampus, etc.)
+```
 
-## What's Next
+## Demo Script
 
-- [ ] Supermemory/Mem0 integration for persistent cross-session memory
-- [ ] Mood-congruent memory retrieval (find past entries by neural similarity)
-- [ ] Therapeutic content recommendation based on activation profiles
-- [ ] Audio/video journaling (TRIBE v2 supports all three modalities)
+1. Open the app — show the 3D brain with pre-seeded journal entries
+2. Switch to **Memory** tab — click a sample question like *"Caroline, what career path are you pursuing?"*
+3. Watch the brain light up with real TRIBE activations while memories are retrieved
+4. Click a follow-up suggestion to continue the conversation
+5. Switch to **Timeline** tab — hit Play to animate the brain morphing between emotional states
+6. Point out delta badges: *"See how Hippocampus drops 22% when we shift from memory recall to career planning"*
+7. Pitch: *"Every therapist question gets a neuroscience-grade brain activation map — showing exactly which neural circuits fire during recall"*
+
+## Use Cases
+
+- **Therapy tools** — Visualize which brain regions activate when patients discuss different topics
+- **Neuroscience education** — Interactive brain encoding demonstrations
+- **Memory research** — Study how different types of recall activate distinct neural circuits
+- **Emotional profiling** — Track activation patterns over time to detect emotional trends
 
 ## License
 
-TRIBE v2 is CC BY-NC 4.0 (non-commercial research only).
+TRIBE v2 model is CC BY-NC 4.0 (non-commercial research only).
