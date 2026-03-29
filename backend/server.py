@@ -27,8 +27,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from database import SessionDB
-from domains import DOMAIN_REGISTRY, get_domain, list_domains as list_domain_configs, get_system_prompt
+try:
+    from backend.database import SessionDB
+    from backend.domains import DOMAIN_REGISTRY, get_domain, list_domains as list_domain_configs, get_system_prompt
+except ImportError:
+    from database import SessionDB
+    from domains import DOMAIN_REGISTRY, get_domain, list_domains as list_domain_configs, get_system_prompt
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -109,9 +113,12 @@ emotion_classifier = None
 db = SessionDB()
 
 # ─── Memory Store ───
-import sys
-sys.path.insert(0, str(Path(__file__).resolve().parent))
-from memory_store import MemoryStore
+try:
+    from backend.memory_store import MemoryStore
+except ImportError:
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from memory_store import MemoryStore
 
 memory_store = MemoryStore()
 
@@ -826,4 +833,14 @@ async def serve_index():
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8420, log_level="info")
+    backend_dir = str(Path(__file__).resolve().parent)
+    uvicorn.run(
+        "backend.server:app",
+        host="0.0.0.0",
+        port=8420,
+        log_level="info",
+        reload=True,
+        reload_dirs=[backend_dir],
+        reload_includes=["*.py"],
+        reload_excludes=["*.db", "*.db-wal", "*.db-shm", "__pycache__/*"],
+    )

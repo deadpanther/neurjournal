@@ -11,7 +11,7 @@ import time
 import uuid
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "neurjournal.db"
+DB_PATH = Path(__file__).parent.parent / "data" / "neurjournal.db"
 
 
 def get_db() -> sqlite3.Connection:
@@ -23,6 +23,7 @@ def get_db() -> sqlite3.Connection:
 
 
 def init_db():
+    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = get_db()
     conn.executescript("""
         CREATE TABLE IF NOT EXISTS domains (
