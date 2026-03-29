@@ -51,11 +51,29 @@ class MemoryStore:
         )
         self._tfidf_matrix = self._vectorizer.fit_transform(texts)
 
+    def _detect_speaker(self, query: str) -> str | None:
+        """Return the speaker name if the query targets a specific person."""
+        all_speakers = set()
+        for c in self.conversations:
+            all_speakers.update(c.get("speakers", []))
+        query_lower = query.lower()
+        matched = [s for s in all_speakers if s.lower() in query_lower]
+        return matched[0] if len(matched) == 1 else None
+
     def search(self, query: str, top_k: int = 5) -> list[dict]:
         if not self.memories or self._vectorizer is None:
             return []
         query_vec = self._vectorizer.transform([query])
         scores = cosine_similarity(query_vec, self._tfidf_matrix).flatten()
+
+        target_speaker = self._detect_speaker(query)
+        if target_speaker:
+            for i, mem in enumerate(self.memories):
+                if mem.get("speaker", "").lower() == target_speaker.lower():
+                    scores[i] *= 3.0
+                else:
+                    scores[i] *= 0.15
+
         top_indices = np.argsort(scores)[::-1][:top_k]
         results = []
         for idx in top_indices:
