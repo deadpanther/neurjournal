@@ -56,8 +56,10 @@ class MemoryStore:
         texts = [m["text"] for m in self.memories]
 
         if self._use_st:
-            logger.info("Building semantic index with all-MiniLM-L6-v2...")
-            self._model = SentenceTransformer("all-MiniLM-L6-v2")
+            if self._model is None:
+                logger.info("Loading SentenceTransformer all-MiniLM-L6-v2...")
+                self._model = SentenceTransformer("all-MiniLM-L6-v2")
+            logger.info(f"Encoding {len(texts)} memories...")
             self._embeddings = self._model.encode(texts, show_progress_bar=False, normalize_embeddings=True)
             logger.info(f"Encoded {len(texts)} memories → {self._embeddings.shape}")
         else:

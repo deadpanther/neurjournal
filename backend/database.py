@@ -62,7 +62,7 @@ def init_db():
             vertex_activations BLOB,
             emotion JSON DEFAULT '{}',
             processing_time_ms REAL DEFAULT 0,
-            model_mode TEXT DEFAULT 'demo',
+            model_mode TEXT DEFAULT 'tribe',
             metadata JSON DEFAULT '{}',
             created_at REAL DEFAULT (unixepoch())
         );
@@ -159,7 +159,7 @@ class SessionDB:
     def save_activation(self, session_id: str, subject_id: str, query: str,
                         generated_answer: str = "", regions: dict = None,
                         vertex_activations: list = None, emotion: dict = None,
-                        processing_time_ms: float = 0, model_mode: str = "demo",
+                        processing_time_ms: float = 0, model_mode: str = "tribe",
                         metadata: dict = None) -> dict:
         aid = str(uuid.uuid4())[:8]
         verts_blob = None

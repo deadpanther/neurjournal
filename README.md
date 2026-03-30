@@ -1,126 +1,91 @@
-# NeurJournal — Multi-Domain Brain Activation Platform
+# 🧠 NeurJournal
 
-> Built at Founders Inc Night Hacks
+**Watch your thoughts light up the brain in real-time.**
 
-**NeurJournal** is an extensible platform that maps text to real brain activations using Meta's **TRIBE v2** deep multimodal brain encoding model. Switch between domains — therapy, education, UX research, neuromarketing, meditation, sports — each with tailored prompts, region labeling, and session tracking. Upload your own conversations, create subjects, and track longitudinal neural trends over time.
+NeurJournal maps journal entries to fMRI-predicted brain activations using Meta's [TRIBE v2](https://github.com/facebookresearch/TRIBE-2) deep multimodal brain encoder. Type a thought, and see which cortical regions activate on an interactive 3D brain — instantly.
+
+> Built at Founders Inc Night Hacks. Powered by LLaMA 3.2-3B + Wav2Vec-BERT → 20,484 cortical vertices.
+
+---
+
+## What Makes This Different
+
+Most "brain visualization" apps are decorative — they animate random regions with no scientific basis. NeurJournal uses a **research-grade brain encoder** (Meta TRIBE v2) that predicts actual fMRI vertex activations from text and audio. The same model used in neuroscience research papers, now in a journaling app.
+
+**Every activation you see is real.** There are no fabricated values, no random noise, no keyword heuristics. If the TRIBE model isn't available, the app tells you honestly rather than faking results.
+
+| Feature | NeurJournal | Typical "Brain App" |
+|---------|------------|---------------------|
+| Brain model | Meta TRIBE v2 (fMRI prediction) | Random/keyword mapping |
+| Resolution | 20,484 cortical vertices | ~10 labeled blobs |
+| Data integrity | 100% real model predictions, zero fabrication | Often decorative/random |
+| Longitudinal tracking | Cognitive weather + trends over sessions | None |
+| Scientific backing | fsaverage5 mesh, Destrieux atlas | Decorative |
+
+---
+
+## Key Features
+
+### Brain Activation Analysis
+Write a journal entry and click Analyze — TRIBE v2 predicts fMRI vertex activations from your text. The 3D brain visualizes real model output, not approximations.
+
+### Cognitive Weather Dashboard
+A longitudinal "weather report" for your brain — aggregates recent sessions to show dominant regions, rising/falling trends, and top emotions over time. Displayed at the top of the Journal tab.
+
+### 3D Cortical Visualization
+Interactive fsaverage5 mesh with inflated/pial views, orbit controls, region tooltips, connectivity lines between co-active regions, and an inferno-inspired colormap.
+
+### Multi-Domain Platform
+6 pre-built domain adapters — Therapy, Education, UX Research, Neuromarketing, Meditation, Sports — each with tailored prompts, region labels, and subject tracking.
+
+### Semantic Memory System
+Upload conversations, query them with natural language, and watch the AI-generated answer activate the brain. Uses sentence-transformers for semantic search with speaker-aware boosting.
+
+---
 
 ## Architecture
 
 ```
-┌──────────────────────┐                    ┌──────────────────────────┐
-│   Browser (index.html)│   REST API         │    FastAPI Platform       │
-│                       │ ──────────────────→│                          │
-│  Three.js 3D Brain    │   /analyze         │  ┌──────────────────┐   │
-│  fsaverage5 20k verts │   /memory/query    │  │   TRIBE v2        │   │
-│                       │   /domains         │  │   LLaMA 3.2-3B    │   │
-│  Domain Switcher      │   /subjects        │  │   Wav2Vec-BERT    │   │
-│  Subject Manager      │   /sessions        │  │   (→ fMRI)        │   │
-│  File Upload          │   /activations     │  └──────────────────┘   │
-│                       │   /upload          │           │              │
-│  Tabs:                │ ←──────────────────│  ┌────────▼─────────┐   │
-│  • Journal            │  activations +     │  │  Domain Adapters  │   │
-│  • Memory             │  regions + answer  │  │  (6 built-in)     │   │
-│  • Timeline           │  + emotion + trends│  └──────────────────┘   │
-│  • Patterns           │                    │           │              │
-│                       │                    │  ┌────────▼─────────┐   │
-└──────────────────────┘                    │  │  SQLite + Memory  │   │
-                                             │  │  Persistent store │   │
-                                             │  │  + Embeddings     │   │
-                                             │  └──────────────────┘   │
-                                             └──────────────────────────┘
+┌──────────────────────────┐                 ┌──────────────────────────────┐
+│   Browser (index.html)    │    REST API     │     FastAPI Backend           │
+│                           │ ──────────────→ │                              │
+│  Three.js 3D Brain        │  /analyze       │  ┌─────────────────────┐    │
+│  20,484 vertex fsaverage5 │  /memory/query  │  │    TRIBE v2          │    │
+│                           │  /cognitive-    │  │    LLaMA 3.2-3B      │    │
+│  Cognitive Weather Card   │    weather      │  │    Wav2Vec-BERT       │    │
+│                           │  /domains       │  │    (→ fMRI vertices)  │    │
+│                           │  /subjects      │  └─────────────────────┘    │
+│                           │  /upload        │           │                  │
+│  All data from real       │ ←────────────── │  ┌───────▼──────────┐      │
+│  TRIBE v2 predictions     │  activations +  │  │  Domain Adapters  │      │
+│                           │  regions + LLM  │  │  (6 built-in)     │      │
+│  Tabs: Journal · Memory   │  answer +       │  └──────────────────┘      │
+│         Timeline · Patterns│  emotion        │  ┌──────────────────┐      │
+│                           │                 │  │  SQLite + Sentence │      │
+│  Voice Input · Dark/Light │                 │  │  Transformer       │      │
+└──────────────────────────┘                 │  │  Embeddings         │      │
+                                              │  └──────────────────┘      │
+                                              └──────────────────────────────┘
 ```
 
-## Domains
-
-NeurJournal ships with 6 pre-built domain adapters. Each customizes prompts, region labels, subject terminology, and sample questions:
-
-| Domain | Icon | Subject Label | Use Case |
-|--------|------|---------------|----------|
-| Clinical Therapy | 🧠 | Patient | Track neural patterns during therapeutic conversations |
-| Learning & Education | 📚 | Student | Monitor cognitive engagement during learning |
-| UX Research | 🎨 | Participant | Measure neural responses to interfaces |
-| Neuromarketing | 📊 | Consumer | Analyze responses to ads, brands, products |
-| Meditation & Wellness | 🧘 | Practitioner | Track mindfulness states across practice |
-| Sports Performance | ⚡ | Athlete | Analyze cognitive-motor patterns |
-
-Custom domains can be added by extending `backend/domains.py`.
-
-## How It Works
-
-1. **Choose a domain** — Click a domain pill (Therapy, Education, UX, etc.) to configure the platform
-2. **Create or select a subject** — Add patients, students, participants, etc.
-3. **Memory ingestion** — Upload conversations (.json, .txt, .csv) or use pre-loaded LoCoMo data
-4. **Query** — Ask a question in the context of your domain
-5. **Memory retrieval** — Semantic search (sentence-transformers) with speaker-aware boosting
-6. **Answer generation** — GPT-4o-mini synthesizes an answer using the domain's system prompt
-7. **Brain encoding** — TRIBE v2 (LLaMA 3.2-3B + Wav2Vec-BERT) predicts fMRI across 20,484 cortical vertices
-8. **Visualization** — Activations painted on interactive 3D brain with inferno colormap
-9. **Persistence** — Every query, activation, and emotion is saved to SQLite for longitudinal tracking
-10. **Trends** — View how a subject's brain patterns change over weeks of sessions
-
-## Features
-
-### Core
-- **3D Brain Visualization** — Interactive fsaverage5 cortical mesh, inflated/pial views, orbit controls
-- **Multi-Domain Platform** — 6 built-in domains, each with tailored prompts and region context
-- **Subject Management** — Create and track subjects across sessions
-- **Persistent Storage** — SQLite database for sessions, activations, and longitudinal data
-- **File Upload** — Ingest custom conversations from JSON, TXT, or CSV files
-
-### Analysis
-- **Semantic Memory Search** — sentence-transformers embeddings with speaker-aware boosting
-- **Emotion Detection** — Per-query emotion classification (distilroberta)
-- **Brain Connectivity** — Curved lines between co-active regions
-- **Activation Similarity** — Find queries with similar brain patterns (cosine similarity)
-- **Longitudinal Trends** — Track how regions change over time for each subject
-- **Multi-Query Comparison** — Side-by-side activation tables
-
-### Interface
-- **Memory Tab** — Query memories, view evidence, get AI answers with brain activations
-- **Timeline Tab** — Sparkline chart with playback, delta badges, smooth brain animation
-- **Follow-up Suggestions** — Context-aware next questions
-- **Session Summary** — LLM-generated clinical summaries
-- **Voice Input** — Web Speech API for hands-free querying
-- **Region Tooltips** — Hover over 3D brain for region details
-- **Dark/Light Theme** — Toggle between themes
-- **Keyboard Shortcuts** — 1-4 tabs, Space play/pause, arrows navigate
-- **Export Reports** — Download standalone HTML session reports
-
-## API Reference
-
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/health` | GET | Server status, model mode, available domains |
-| `/domains` | GET | List all domain adapters |
-| `/domains/{id}` | GET | Full domain config (prompts, labels, samples) |
-| `/subjects` | GET/POST | List or create subjects (filter by `domain_id`) |
-| `/subjects/{id}/history` | GET | Activation history for a subject |
-| `/subjects/{id}/trends` | GET | Longitudinal region trends and emotion counts |
-| `/sessions` | POST | Start a new session for a subject |
-| `/activations` | POST | Save an activation record |
-| `/analyze` | POST | Direct text → brain activation (TRIBE or fallback) |
-| `/memory/query` | POST | Semantic memory search + answer + TRIBE activation |
-| `/upload` | POST | Upload conversation files for memory ingestion |
-| `/emotion` | POST | Classify text emotion |
-| `/llm_chat` | POST | General LLM chat endpoint |
+---
 
 ## Quick Start
 
 ### 1. Setup
 
 ```bash
-chmod +x setup.sh
-./setup.sh
+chmod +x setup.sh && ./setup.sh
 ```
 
 ### 2. Configure
 
 ```bash
-# Create .env in project root
+# .env in project root
 OPENAI_API_KEY=sk-...
 ```
 
-### 3. Ingest Memories
+### 3. Ingest Memories (optional)
 
 ```bash
 source .venv/bin/activate
@@ -131,55 +96,77 @@ python backend/ingest_locomo.py
 
 ```bash
 source .venv/bin/activate
-python backend/server.py
+python -m backend.server
 ```
 
-Open `http://localhost:8420`. Select a domain, create a subject, and start querying.
+Open **http://localhost:8420** — the brain mesh loads in ~3 seconds. Write an entry and click Analyze to see real TRIBE v2 predictions.
 
-## Files
+> **Note**: The TRIBE model must be loaded on the backend for analysis to work. The app will clearly indicate when the model is unavailable rather than showing fabricated data.
+
+---
+
+## Domains
+
+| Domain | Icon | Subject | Use Case |
+|--------|------|---------|----------|
+| Clinical Therapy | 🧠 | Patient | Track neural patterns during therapeutic conversations |
+| Learning & Education | 📚 | Student | Monitor cognitive engagement during learning |
+| UX Research | 🎨 | Participant | Measure neural responses to interfaces |
+| Neuromarketing | 📊 | Consumer | Analyze responses to ads, brands, products |
+| Meditation & Wellness | 🧘 | Practitioner | Track mindfulness states across practice |
+| Sports Performance | ⚡ | Athlete | Analyze cognitive-motor patterns |
+
+Add custom domains by extending `backend/domains.py`.
+
+---
+
+## API
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/health` | GET | Server status, model mode, available domains |
+| `/analyze` | POST | Text → brain activation (TRIBE v2 only, 503 if unavailable) |
+| `/memory/query` | POST | Semantic search + LLM answer + brain activation |
+| `/cognitive-weather` | GET | Longitudinal brain weather report |
+| `/domains` | GET | List domain adapters |
+| `/subjects` | GET/POST | Manage subjects per domain |
+| `/subjects/{id}/history` | GET | Activation history |
+| `/subjects/{id}/trends` | GET | Longitudinal trends |
+| `/sessions` | POST | Start new session |
+| `/upload` | POST | Upload conversation files |
+| `/emotion` | POST | Emotion classification |
+
+---
+
+## File Structure
 
 ```
 neurojournal/
-├── index.html                  # Full frontend (Three.js + domain UI)
-├── brain_mesh.json             # fsaverage5 cortical mesh data
-├── setup.sh                    # One-command environment setup
-├── .env                        # API keys (not committed)
+├── index.html              # Single-page app (Three.js, all UI)
+├── brain_mesh.json         # fsaverage5 cortical mesh
+├── setup.sh                # One-command setup
+├── .env                    # API keys (not committed)
 ├── backend/
-│   ├── server.py               # FastAPI platform server
-│   ├── database.py             # SQLite persistence layer
-│   ├── domains.py              # Domain adapter registry (6 domains)
-│   ├── memory_store.py         # Semantic search (sentence-transformers)
-│   ├── ingest_locomo.py        # LoCoMo dataset parser
-│   ├── memories.json           # Ingested memory records
-│   ├── neurjournal.db          # SQLite database (auto-created)
-│   └── requirements.txt        # Python dependencies
+│   ├── server.py           # FastAPI server + TRIBE orchestration
+│   ├── database.py         # SQLite persistence
+│   ├── domains.py          # 6 domain adapters
+│   ├── memory_store.py     # Semantic search (sentence-transformers)
+│   ├── ingest_locomo.py    # LoCoMo dataset parser
+│   └── requirements.txt    # Python dependencies
 └── README.md
 ```
 
-## Extending to New Domains
+---
 
-Add a new domain in `backend/domains.py`:
+## Tech Stack
 
-```python
-DOMAIN_REGISTRY["my_domain"] = {
-    "id": "my_domain",
-    "name": "My Custom Domain",
-    "icon": "🔬",
-    "description": "Description for your use case.",
-    "subject_label": "Participant",
-    "session_label": "Session",
-    "query_placeholder": "Ask about...",
-    "system_prompt": "You are an assistant for...",
-    "region_labels": {
-        "prefrontal": {"label": "Prefrontal Cortex", "context": "Your context here"},
-        # ... more regions
-    },
-    "sample_questions": ["Example question 1?", "Example question 2?"],
-}
-```
-
-The domain automatically appears in the frontend switcher on next server restart.
+- **Brain Encoding**: Meta TRIBE v2 (LLaMA 3.2-3B + Wav2Vec-BERT 2.0)
+- **Backend**: FastAPI + Uvicorn, SQLite
+- **Frontend**: Vanilla JS, Three.js (3D), Web Speech API
+- **Embeddings**: sentence-transformers (all-MiniLM-L6-v2)
+- **Emotion**: distilroberta (j-hartmann)
+- **LLM**: GPT-4o-mini (text summaries only — never used to fabricate activations)
 
 ## License
 
-TRIBE v2 model is CC BY-NC 4.0 (non-commercial research only).
+TRIBE v2 model: CC BY-NC 4.0 (non-commercial research).

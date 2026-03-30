@@ -13,8 +13,22 @@ import json
 import logging
 import os
 import time
+import warnings
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+# Suppress noisy third-party warnings that clutter the terminal
+warnings.filterwarnings("ignore", category=UserWarning, module="neuralset")
+warnings.filterwarnings("ignore", category=FutureWarning, module="x_transformers")
+warnings.filterwarnings("ignore", message=".*position_ids.*")
+warnings.filterwarnings("ignore", message=".*LabelEncoder.*")
+warnings.filterwarnings("ignore", message=".*Missing events.*")
+warnings.filterwarnings("ignore", message=".*LOAD REPORT.*")
+warnings.filterwarnings("ignore", message=".*event_types has not been set.*")
+
+# Also suppress via logging for warnings that go through the logging system
+for _noisy in ("neuralset.extractors.base",):
+    logging.getLogger(_noisy).setLevel(logging.ERROR)
 
 from dotenv import load_dotenv
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
@@ -106,7 +120,7 @@ BRAIN_REGIONS = {
 
 # ─── Global Model State ───
 tribe_model = None
-model_mode = "loading"  # "tribe", "fallback", "loading"
+model_mode = "loading"  # "tribe", "unavailable", "loading"
 emotion_classifier = None
 
 # ─── Persistent Storage + Domains ───
@@ -181,8 +195,8 @@ def load_tribe_model():
         return True
     except Exception as e:
         logger.warning(f"Could not load TRIBE v2: {e}")
-        logger.info("Falling back to API mode.")
-        model_mode = "fallback"
+        logger.info("TRIBE unavailable — brain activation analysis will not be available.")
+        model_mode = "unavailable"
         return False
 
 
@@ -382,62 +396,48 @@ async def llm_chat(prompt: str, max_tokens: int = 1000) -> str:
     raise HTTPException(status_code=500, detail="No LLM API key set (OPENAI_API_KEY or ANTHROPIC_API_KEY)")
 
 
-async def predict_with_fallback(text: str) -> dict:
-    """Use LLM API as fallback when TRIBE isn't available."""
-    all_functions = set()
-    for r in BRAIN_REGIONS.values():
-        all_functions.update(r["functions"])
-
-    prompt = f"""Analyze this journal entry for emotional and cognitive activations.
-Return ONLY a JSON object mapping these exact function names to activation values (0.0-1.0):
-{sorted(all_functions)}
-
-Only include functions with activation > 0.1. Also include:
-- "summary": a <15 word summary
-- "dominant": the single strongest function name
+async def generate_summary(text: str) -> dict:
+    """Generate a text-only summary via LLM. No activation values — those come only from TRIBE."""
+    prompt = f"""Summarize this journal entry in under 15 words and identify the single strongest emotion or cognitive state present.
+Return ONLY a JSON object with exactly two keys: "summary" and "dominant".
 
 Journal entry: "{text}"
 
 Return ONLY valid JSON, no markdown, no explanation."""
 
-    raw = await llm_chat(prompt)
-    raw = raw.replace("```json", "").replace("```", "").strip()
-    parsed = json.loads(raw)
-
-    summary = parsed.pop("summary", "Journal entry")
-    dominant = parsed.pop("dominant", "calm")
-
-    regions = {}
-    for region_key, region_info in BRAIN_REGIONS.items():
-        max_activation = 0.0
-        for func in region_info["functions"]:
-            if func in parsed and parsed[func] > max_activation:
-                max_activation = parsed[func]
-
-        regions[region_key] = {
-            "label": region_info["label"],
-            "activation": round(max_activation, 4),
-            "functions": region_info["functions"],
-            "position": {"x": region_info["x"], "y": region_info["y"]},
+    try:
+        raw = await llm_chat(prompt, max_tokens=100)
+        raw = raw.replace("```json", "").replace("```", "").strip()
+        parsed = json.loads(raw)
+        return {
+            "summary": parsed.get("summary", text[:60] + "..."),
+            "dominant": parsed.get("dominant", ""),
         }
-
-    return {
-        "mode": "fallback",
-        "regions": regions,
-        "summary": summary,
-        "dominant": dominant,
-        "raw_emotions": parsed,
-    }
+    except Exception as e:
+        logger.warning(f"Summary generation failed: {e}")
+        return {"summary": text[:60] + "...", "dominant": ""}
 
 
 # ─── FastAPI App ───
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    t0 = time.time()
+    logger.info("=" * 56)
+    logger.info("  NeurJournal — Real-time Brain Activation Platform")
+    logger.info("=" * 56)
     load_emotion_model()
     load_tribe_model()
     for d in DOMAIN_REGISTRY.values():
         db.ensure_domain(d["id"], d["name"], d.get("description", ""), d)
+    elapsed = time.time() - t0
+    logger.info("-" * 56)
+    logger.info(f"  Models loaded in {elapsed:.1f}s")
+    logger.info(f"  TRIBE: {model_mode} | Emotion: {'yes' if emotion_classifier else 'no'}")
+    logger.info(f"  Memory: {len(memory_store.memories)} entries")
+    logger.info(f"  Domains: {', '.join(DOMAIN_REGISTRY.keys())}")
+    logger.info(f"  Server: http://localhost:8420")
+    logger.info("=" * 56)
     yield
 
 
@@ -457,12 +457,11 @@ class AnalyzeRequest(BaseModel):
 
 
 class AnalyzeResponse(BaseModel):
-    mode: str  # "tribe" or "fallback"
+    mode: str  # "tribe" only — no fake fallback
     regions: dict
     vertex_activations: list[float] | None = None
     summary: str | None = None
     dominant: str | None = None
-    raw_emotions: dict | None = None
     n_vertices: int | None = None
     n_timesteps: int | None = None
     raw_stats: dict | None = None
@@ -494,21 +493,28 @@ async def analyze(req: AnalyzeRequest):
     if not req.text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty")
 
+    if model_mode != "tribe" or tribe_model is None:
+        raise HTTPException(
+            status_code=503,
+            detail="TRIBE model is not loaded. Brain activation analysis requires the research-grade model.",
+        )
+
     start = time.time()
 
-    if model_mode == "tribe" and tribe_model is not None:
-        try:
-            result = predict_with_tribe(req.text)
-            # Use LLM for summary/dominant since TRIBE only gives activations
-            fallback_result = await predict_with_fallback(req.text)
-            result["summary"] = fallback_result.get("summary")
-            result["dominant"] = fallback_result.get("dominant")
-            result["raw_emotions"] = fallback_result.get("raw_emotions")
-        except Exception as e:
-            logger.error(f"TRIBE prediction failed: {e}")
-            result = await predict_with_fallback(req.text)
-    else:
-        result = await predict_with_fallback(req.text)
+    try:
+        result = predict_with_tribe(req.text)
+    except Exception as e:
+        logger.error(f"TRIBE prediction failed: {e}")
+        raise HTTPException(status_code=500, detail=f"TRIBE prediction failed: {e}")
+
+    try:
+        summary_data = await generate_summary(req.text)
+        result["summary"] = summary_data.get("summary")
+        result["dominant"] = summary_data.get("dominant")
+    except Exception as e:
+        logger.warning(f"Summary generation failed: {e}")
+        result["summary"] = req.text[:60] + "..."
+        result["dominant"] = ""
 
     elapsed = (time.time() - start) * 1000
     return AnalyzeResponse(**result, processing_time_ms=round(elapsed, 1))
@@ -568,19 +574,12 @@ Answer in 1-3 sentences based ONLY on the memories above. If the memories don't 
         logger.error(f"LLM answer generation failed: {e}")
         generated_answer = f"Based on memories: {retrieved[0]['text']}" if retrieved else "No relevant memories found."
 
-    # Run the generated answer through TRIBE (or fallback) for brain activations
     tribe_result = None
-    if req.run_tribe and generated_answer:
-        if model_mode == "tribe" and tribe_model is not None:
-            try:
-                tribe_result = predict_with_tribe(generated_answer)
-            except Exception as e:
-                logger.error(f"TRIBE on memory answer failed: {e}")
-        if tribe_result is None:
-            try:
-                tribe_result = await predict_with_fallback(generated_answer)
-            except Exception as e:
-                logger.error(f"Fallback on memory answer failed: {e}")
+    if req.run_tribe and generated_answer and model_mode == "tribe" and tribe_model is not None:
+        try:
+            tribe_result = predict_with_tribe(generated_answer)
+        except Exception as e:
+            logger.error(f"TRIBE on memory answer failed: {e}")
 
     emotion_data = None
     if emotion_classifier and generated_answer:
@@ -738,7 +737,7 @@ class SaveActivationRequest(BaseModel):
     vertex_activations: list[float] | None = None
     emotion: dict = {}
     processing_time_ms: float = 0
-    model_mode: str = "demo"
+    model_mode: str = "tribe"
 
 
 @app.post("/activations")
@@ -754,6 +753,56 @@ async def save_activation(req: SaveActivationRequest):
         processing_time_ms=req.processing_time_ms,
         model_mode=req.model_mode,
     )
+
+
+# ─── Cognitive Weather ───
+
+
+@app.get("/cognitive-weather")
+async def cognitive_weather(subject_id: str = None):
+    """Aggregate recent activations into a cognitive weather report."""
+    history = db.get_subject_history(subject_id, limit=20) if subject_id else []
+    if len(history) < 2:
+        return {"available": False}
+
+    region_data: dict[str, dict] = {}
+    emotions: dict[str, int] = {}
+    for h in history:
+        for rk, rv in h.get("regions", {}).items():
+            if rk not in region_data:
+                region_data[rk] = {"label": rv.get("label", rk), "values": []}
+            region_data[rk]["values"].append(rv.get("activation", 0))
+        emo = h.get("emotion", {}).get("dominant")
+        if emo:
+            emotions[emo] = emotions.get(emo, 0) + 1
+
+    metrics = {}
+    for rk, data in region_data.items():
+        vals = data["values"]
+        avg = sum(vals) / len(vals) if vals else 0
+        recent = vals[:3]
+        recent_avg = sum(recent) / len(recent) if recent else 0
+        metrics[rk] = {
+            "label": data["label"],
+            "average": round(avg, 4),
+            "recent": round(recent_avg, 4),
+            "trend": round(recent_avg - avg, 4),
+        }
+
+    dominant = max(metrics.items(), key=lambda x: x[1]["average"]) if metrics else None
+    trends_sorted = sorted(metrics.items(), key=lambda x: abs(x[1]["trend"]), reverse=True)
+    rising = [{"key": k, **v} for k, v in trends_sorted if v["trend"] > 0.02][:2]
+    falling = [{"key": k, **v} for k, v in trends_sorted if v["trend"] < -0.02][:2]
+
+    return {
+        "available": True,
+        "total_entries": len(history),
+        "dominant": {"key": dominant[0], **dominant[1]} if dominant else None,
+        "rising": rising,
+        "falling": falling,
+        "top_emotions": dict(sorted(emotions.items(), key=lambda x: -x[1])[:3]),
+        "metrics": metrics,
+    }
 
 
 # ─── Platform: File Upload & Custom Ingestion ───
@@ -834,13 +883,23 @@ async def serve_index():
 
 if __name__ == "__main__":
     backend_dir = str(Path(__file__).resolve().parent)
-    uvicorn.run(
-        "backend.server:app",
-        host="0.0.0.0",
-        port=8420,
-        log_level="info",
-        reload=True,
-        reload_dirs=[backend_dir],
-        reload_includes=["*.py"],
-        reload_excludes=["*.db", "*.db-wal", "*.db-shm", "__pycache__/*"],
-    )
+    dev_mode = os.environ.get("DEV", "").lower() in ("1", "true", "yes")
+    if dev_mode:
+        logger.warning(
+            "DEV mode: hot reload ON — TRIBE & emotion models will re-load on every "
+            "file change. Run without DEV=1 for production to keep models resident."
+        )
+        uvicorn.run(
+            "backend.server:app",
+            host="0.0.0.0",
+            port=8420,
+            log_level="info",
+            reload=True,
+            reload_dirs=[backend_dir],
+            reload_includes=["*.py"],
+            reload_excludes=["*.db", "*.db-wal", "*.db-shm", "__pycache__/*"],
+        )
+    else:
+        # Pass app object directly — avoids uvicorn re-importing the module
+        # which would create duplicate MemoryStore / SentenceTransformer instances
+        uvicorn.run(app, host="0.0.0.0", port=8420, log_level="info")

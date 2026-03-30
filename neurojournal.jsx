@@ -176,8 +176,8 @@ export default function NeuroJournal() {
     setIsAnalyzing(false);
   }, [inputText, isAnalyzing, backend]);
 
-  const modeLabel = backend.model_mode === "tribe" ? "TRIBE v2 LIVE" : backend.model_mode === "fallback" ? "API MODE" : backend.status === "offline" ? "BROWSER" : "...";
-  const modeColor = backend.model_mode === "tribe" ? "#22c55e" : backend.model_mode === "fallback" ? "#f59e0b" : "#6366f1";
+  const modeLabel = backend.model_mode === "tribe" ? "TRIBE v2 LIVE" : backend.status === "ok" ? "LOADING" : backend.status === "offline" ? "OFFLINE" : "...";
+  const modeColor = backend.model_mode === "tribe" ? "#22c55e" : backend.status === "ok" ? "#f59e0b" : "#ef4444";
 
   return (
     <div style={{ minHeight: "100vh", background: "#020617", color: "#e2e8f0", fontFamily: "var(--body)", "--mono": "'JetBrains Mono', monospace", "--body": "'Inter', system-ui, sans-serif" }}>

@@ -3,7 +3,20 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>NeurJournal — Emotional Activation Mapping</title>
+<title>NeurJournal — Real-time Brain Activation Mapping</title>
+<meta name="description" content="Watch your thoughts light up the brain in real-time. NeurJournal maps journal entries to fMRI-predicted brain activations using Meta TRIBE v2.">
+
+<!-- Open Graph / X (Twitter) sharing -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="NeurJournal — See Your Thoughts Light Up the Brain">
+<meta property="og:description" content="Real-time 3D brain activation mapping powered by Meta TRIBE v2. Write a journal entry, watch which brain regions activate. Open source neuroscience meets journaling.">
+<meta property="og:site_name" content="NeurJournal">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="NeurJournal — See Your Thoughts Light Up the Brain">
+<meta name="twitter:description" content="Real-time 3D brain activation mapping powered by Meta TRIBE v2. Write a journal entry, watch which brain regions activate.">
+
+<!-- Favicon -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,300;1,9..40,400&family=IBM+Plex+Mono:wght@300;400;500;600&family=Fraunces:opsz,wght@9..144,300;9..144,500;9..144,700&display=swap');
   :root {
@@ -358,6 +371,74 @@
   .trend-down{color:#f87171}
   .trend-flat{color:var(--t5)}
   .trend-val{font:400 9px var(--mono);color:var(--t5)}
+
+  /* ── REAL-TIME LIVE INDICATOR ── */
+  .live-indicator{display:inline-flex;align-items:center;gap:5px;font:500 8px var(--mono);color:#34d399;letter-spacing:1px;text-transform:uppercase;padding:3px 10px;background:#34d39912;border:1px solid #34d39922;border-radius:20px;animation:fadeIn .3s}
+  .live-dot{width:6px;height:6px;border-radius:50%;background:#34d399;box-shadow:0 0 8px #34d39966;animation:pulse 1.5s infinite;display:inline-block}
+
+  /* ── NARRATIVE ARC SCRUBBER ── */
+  .arc-wrap{
+    position:absolute;bottom:76px;left:50%;transform:translateX(-50%);
+    background:var(--glass);backdrop-filter:blur(24px) saturate(1.2);
+    border:1px solid var(--glass-bd);border-radius:16px;padding:14px 18px;
+    z-index:3;box-shadow:0 8px 40px #00000050;max-width:600px;width:85%;display:none}
+  .arc-wrap.show{display:block}
+  .arc-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;gap:10px}
+  .arc-title{font:500 9px var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:2px}
+  .arc-close{border:none;background:transparent;color:var(--t4);cursor:pointer;font:14px var(--body);padding:2px 6px;border-radius:4px;transition:all .2s}
+  .arc-close:hover{background:#f8717118;color:#f87171}
+  .arc-track{display:flex;gap:3px;align-items:flex-end;height:44px;margin-bottom:6px}
+  .arc-bar{flex:1;border-radius:4px 4px 0 0;cursor:pointer;transition:all .3s;min-width:6px;position:relative}
+  .arc-bar:hover{filter:brightness(1.3);transform:scaleY(1.08);transform-origin:bottom}
+  .arc-bar.sel{outline:2px solid #fff;outline-offset:1px;filter:brightness(1.2)}
+  .arc-text{font:400 12px/1.6 var(--body);color:var(--t2);min-height:20px;padding:6px 0;border-top:1px solid var(--glass-bd);margin-top:4px}
+  .arc-text .arc-hl{color:var(--t1);font-weight:500}
+  .arc-counter{font:400 9px var(--mono);color:var(--t5);flex-shrink:0}
+
+  /* ── COGNITIVE WEATHER CARD ── */
+  .weather-card{
+    background:linear-gradient(135deg,#818cf80a,#67e8f908,#6ee7b708);
+    border:1px solid rgba(129,140,248,.12);border-radius:var(--radius);
+    padding:20px;margin-bottom:14px;animation:fadeIn .5s ease-out;position:relative;overflow:hidden}
+  .weather-card::before{content:'';position:absolute;top:-30px;right:-30px;width:120px;height:120px;
+    background:radial-gradient(circle,#818cf812,transparent);border-radius:50%;pointer-events:none}
+  .weather-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;position:relative;z-index:1}
+  .weather-icn{font-size:32px;line-height:1;filter:drop-shadow(0 2px 8px #00000033)}
+  .weather-tw{flex:1}
+  .weather-t{font:600 15px var(--body);color:var(--t1);margin-bottom:2px}
+  .weather-st{font:400 10px var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:1px}
+  .weather-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;position:relative;z-index:1}
+  .weather-m{background:rgba(0,0,0,.15);border-radius:10px;padding:10px 12px}
+  .weather-ml{font:400 8px var(--mono);color:var(--t4);text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px}
+  .weather-mv{font:600 18px var(--body);color:var(--t1)}
+  .weather-md{font:400 10px var(--body);color:var(--t3);margin-top:2px}
+  .weather-insight{font:400 12px/1.6 var(--body);color:var(--t3);padding:10px 12px;
+    background:rgba(167,139,250,.06);border-radius:8px;border-left:3px solid var(--accent);position:relative;z-index:1}
+
+  /* ── RESPONSIVE ── */
+  @media(max-width:960px){
+    #app{grid-template-columns:1fr;grid-template-rows:1fr 50vh}
+    .panel{border-right:none;border-bottom:1px solid var(--bd)}
+    .ov-regions{width:200px;padding:14px;top:12px;right:12px}
+    .rr-name{width:80px;font-size:9px}
+    .ov-summary{max-width:240px;top:12px;left:12px;padding:12px 14px}
+    .arc-wrap{width:92%;max-width:none}
+    .controls{padding:4px 6px}
+    .cb{padding:6px 12px;font-size:10px}
+  }
+  @media(max-width:640px){
+    #app{grid-template-rows:55vh 45vh}
+    .panel-header{padding:16px 16px 12px}
+    .logo h1{font-size:18px}
+    .input-wrap{padding:12px 16px}
+    .input-wrap textarea{font-size:13px;padding:12px 14px}
+    .entries{padding:10px 14px 14px}
+    .domain-bar{padding:6px 16px}
+    .subject-bar{padding:4px 16px}
+    .tabs{margin:10px 14px 0}
+    .ov-regions{display:none}
+    .colorbar{display:none}
+  }
 </style>
 </head>
 <body>
@@ -392,7 +473,7 @@
       <button class="tab" data-v="patterns" onclick="setView('patterns')">Patterns</button>
     </div>
     <div class="entries" id="list"></div>
-    <div class="kbd-hint"><kbd>1</kbd>-<kbd>4</kbd> tabs · <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> navigate · <kbd>C</kbd> compare</div>
+    <div class="kbd-hint"><kbd>1</kbd>-<kbd>4</kbd> tabs · <kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> navigate arc/timeline · <kbd>C</kbd> compare</div>
   </div>
 
   <!-- RIGHT PANEL -->
@@ -440,6 +521,16 @@
       <span class="pb-label" id="pb-label">0 / 0</span>
       <button class="pb" id="pb-diff" onclick="window._tlDiff()" title="Compare with previous query">&#916; Diff</button>
     </div>
+
+    <div class="arc-wrap" id="arc-wrap">
+      <div class="arc-head">
+        <span class="arc-title">Narrative Arc</span>
+        <span class="arc-counter" id="arc-counter"></span>
+        <button class="arc-close" onclick="window._closeArc()">✕</button>
+      </div>
+      <div class="arc-track" id="arc-track"></div>
+      <div class="arc-text" id="arc-text"></div>
+    </div>
   </div>
 </div>
 
@@ -476,11 +567,14 @@ const BR={
 
 let md,scene,cam,ren,ctrl,bL,bR,curMesh='inflated',curAct=null,aRot=false;
 let connectivityLines=[],regionCentroids={},showConnectivity=true;
-let backend={status:'offline',model_mode:'demo'};
+let backend={status:'offline',model_mode:'offline'};
 let entries=[],selEntry=null,curView='journal';
 let memConvos=[],memResults=null,memQuerying=false,sampleQuestions=[],memHistory=[],selMemIdx=null;
 let tlIdx=0,tlPlaying=false,tlPlayTimer=null,lerpAnimId=null,deltaDismiss=null;
 let speechRec=null,speechTarget=null,curPatient='all';
+
+// ── Real-time & Narrative Arc state ──
+let arcData=null,arcIdx=0;
 
 // ── Platform: domain/session/subject state ──
 let availDomains=[];
@@ -719,8 +813,7 @@ function updSummary(entry){
   const parts=[];
   if(entry.dominant)parts.push(`Dominant: ${entry.dominant}`);
   if(entry.mode==='tribe')parts.push('TRIBE v2');
-  else if(entry.mode==='fallback')parts.push('API mode');
-  else parts.push('Demo mode');
+  else if(entry.mode==='timeline')parts.push('Timeline');
   if(entry.processing_time_ms)parts.push(`${Math.round(entry.processing_time_ms)}ms`);
   if(entry.n_vertices)parts.push(`${entry.n_vertices} vertices`);
   document.getElementById('summeta').textContent=parts.join(' · ');
@@ -733,11 +826,16 @@ function renderList(){
   if(curView==='patterns'){renderPatterns(el);return}
   if(curView==='timeline'){renderTimeline(el);return}
   if(curView==='memory'){renderMemory(el);return}
-  el.innerHTML=entries.map((e,i)=>{
+  if(entries.length===0){
+    el.innerHTML='<div style="padding:50px 30px;text-align:center"><div style="font-size:48px;margin-bottom:16px;opacity:.5">🧠</div><div style="font:500 15px var(--body);color:var(--t3);margin-bottom:8px">No entries yet</div><div style="font:12px/1.7 var(--mono);color:var(--dim);max-width:280px;margin:0 auto">Write a journal entry above and click <strong style="color:var(--t3)">Analyze</strong> to see real brain activations predicted by Meta TRIBE v2.</div></div>';
+    return;
+  }
+  const _wHtml=renderWeatherHtml();
+  el.innerHTML=_wHtml+entries.map((e,i)=>{
     const sel=selEntry?.id===e.id;
     const topR=e.regions?Object.entries(e.regions).sort((a,b)=>(b[1].activation||0)-(a[1].activation||0)):[];
     const topC=topR[0]?RC[topR[0][0]]||'#6366f1':'#6366f1';
-    const mTag=e.mode==='tribe'?'<span class="tag" style="background:#34d39918;color:#34d399;border:1px solid #34d39922">TRIBE</span>':e.mode==='fallback'?'<span class="tag" style="background:#fbbf2418;color:#fbbf24;border:1px solid #fbbf2422">API</span>':'';
+    const mTag=e.mode==='tribe'?'<span class="tag" style="background:#34d39918;color:#34d399;border:1px solid #34d39922">TRIBE v2</span>':'';
     const txt=e.text.length>130?e.text.slice(0,130)+'…':e.text;
     return`<div class="card${sel?' sel':''}" onclick="window._sel(${i})" style="${sel?'border-left-color:'+topC:''}">
       <div class="card-top"><div style="display:flex;gap:6px;align-items:center"><span class="card-dom" style="color:${topC}">${e.dominant||e.summary||''}</span>${mTag}</div><span class="card-time">${fmtTime(e.timestamp)}</span></div>
@@ -867,15 +965,17 @@ function renderMemory(el){
 async function memoryQuery(query){
   memQuerying=true;memResults=null;selMemIdx=null;renderList();
   try{
-    if(backend.status==='ok'){
-      const body={query,top_k:5,run_tribe:true,domain_id:curDomain};
-      if(curSession)body.session_id=curSession.id;
-      if(curSubject)body.subject_id=curSubject.id;
-      const r=await fetch(`${API}/memory/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
-      memResults=await r.json();
-    }else{
-      memResults=demoMemoryQuery(query);
+    if(backend.status!=='ok'){
+      memQuerying=false;renderList();
+      alert('Backend is offline. Memory queries require the server to be running.');
+      return;
     }
+    const body={query,top_k:5,run_tribe:true,domain_id:curDomain};
+    if(curSession)body.session_id=curSession.id;
+    if(curSubject)body.subject_id=curSubject.id;
+    const r=await fetch(`${API}/memory/query`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+    if(!r.ok){memQuerying=false;renderList();alert('Memory query failed');return}
+    memResults=await r.json();
     memResults.query=query;
     memResults.timestamp=Date.now();
     memHistory.unshift(memResults);
@@ -1148,7 +1248,7 @@ function tlGoTo(idx){
   if(prevH&&regions)showDelta(getRegions(prevH),regions);
 
   if(verts)animateToActivation(verts,800);
-  if(regions){updRegPanel(regions);updSummary({summary:(h.query||'').slice(0,80),dominant:'timeline',mode:h.tribe?.mode||'demo',processing_time_ms:h.processing_time_ms||0,n_vertices:h.tribe?.n_vertices})}
+  if(regions){updRegPanel(regions);updSummary({summary:(h.query||'').slice(0,80),dominant:'timeline',mode:h.tribe?.mode||'timeline',processing_time_ms:h.processing_time_ms||0,n_vertices:h.tribe?.n_vertices})}
   updPlaybackLabel();
   renderList();
 }
@@ -1225,29 +1325,6 @@ function generateFollowUps(results){
 
 let _lastFollowUps=[];
 
-function demoMemoryQuery(query){
-  const lc=query.toLowerCase();
-  const demoMems=[
-    {text:'Caroline attended an LGBTQ support group and found it powerful and inspiring.',speaker:'Caroline',session:1,date:'8 May, 2023',type:'observation',score:.8},
-    {text:'Caroline is keen on counseling or working in mental health to support others.',speaker:'Caroline',session:1,date:'8 May, 2023',type:'observation',score:.65},
-    {text:'Jon lost his job as a banker and began planning his own business.',speaker:'Jon',session:1,date:'20 January, 2023',type:'event_summary',score:.5},
-    {text:'Melanie has pets including another cat named Bailey.',speaker:'Melanie',session:13,date:'23 August, 2023',type:'observation',score:.45},
-    {text:'Gina lost her job at Door Dash and started exploring new opportunities.',speaker:'Gina',session:1,date:'20 January, 2023',type:'event_summary',score:.3},
-  ];
-  const regions={};
-  for(const[k,info]of Object.entries(BR)){
-    let a=.1+Math.random()*.2;
-    if(k==='hippocampus')a+=.4;
-    if(k==='temporal_lobe')a+=.35;
-    if(k==='prefrontal_cortex')a+=.25;
-    regions[k]={label:info.label,activation:Math.min(1,a)};
-  }
-  return{
-    query,retrieved_memories:demoMems.slice(0,5),
-    generated_answer:`Based on the retrieved memories: ${demoMems[0].text}`,
-    tribe:{mode:'demo',regions},processing_time_ms:120
-  };
-}
 
 async function loadMemoryMeta(){
   try{
@@ -1277,6 +1354,7 @@ window.setView=function(v){
   document.getElementById('std-controls').style.display=isTL?'none':'flex';
   document.getElementById('delta-ov').innerHTML='';
   if(!isTL){tlStopPlay()}
+  if(v!=='journal')hideArc();
   renderList();
 };
 window._memQuery=function(){const inp=document.getElementById('mem-inp');if(inp&&inp.value.trim()){memoryQuery(inp.value.trim())}};
@@ -1302,63 +1380,53 @@ function drawColorbar(){
   for(let y=0;y<160;y++){const v=1-y/159;const c=actColor(v);ctx.fillStyle=`rgb(${c.r*255|0},${c.g*255|0},${c.b*255|0})`;ctx.fillRect(0,y,12,1)}
 }
 
-// ── Sample data ──
-const SAMPLES=[
-  {id:'s1',text:'Had an amazing breakthrough at work today. Finally figured out the architecture for the agent system.',timestamp:Date.now()-86400000*3,summary:'Work breakthrough — reward and executive function surge',dominant:'joy',mode:'sample',
-    regions:{prefrontal_cortex:{label:'Prefrontal Cortex',activation:.72},nucleus_accumbens:{label:'Nucleus Accumbens',activation:.91},temporal_lobe:{label:'Temporal Lobe',activation:.53},parietal_lobe:{label:'Parietal Lobe',activation:.41},motor_cortex:{label:'Motor Cortex',activation:.48},anterior_cingulate:{label:'Anterior Cingulate',activation:.33},insula:{label:'Insula',activation:.22},amygdala:{label:'Amygdala',activation:.12},hippocampus:{label:'Hippocampus',activation:.35},occipital_lobe:{label:'Visual Cortex',activation:.38}}},
-  {id:'s2',text:"Couldn't sleep last night. Kept thinking about whether I'm making the right career moves.",timestamp:Date.now()-86400000*2,summary:'Career anxiety — threat detection and rumination loop',dominant:'anxiety',mode:'sample',
-    regions:{amygdala:{label:'Amygdala',activation:.87},anterior_cingulate:{label:'Anterior Cingulate',activation:.72},insula:{label:'Insula',activation:.79},prefrontal_cortex:{label:'Prefrontal Cortex',activation:.41},temporal_lobe:{label:'Temporal Lobe',activation:.33},hippocampus:{label:'Hippocampus',activation:.44},nucleus_accumbens:{label:'Nucleus Accumbens',activation:.09},parietal_lobe:{label:'Parietal Lobe',activation:.18},occipital_lobe:{label:'Visual Cortex',activation:.14},motor_cortex:{label:'Motor Cortex',activation:.31}}},
-  {id:'s3',text:'Long walk in the park with an old friend. Talked about college days and laughed about old times.',timestamp:Date.now()-86400000,summary:'Nostalgic walk — memory retrieval with positive valence',dominant:'nostalgia',mode:'sample',
-    regions:{hippocampus:{label:'Hippocampus',activation:.92},temporal_lobe:{label:'Temporal Lobe',activation:.81},nucleus_accumbens:{label:'Nucleus Accumbens',activation:.63},insula:{label:'Insula',activation:.58},prefrontal_cortex:{label:'Prefrontal Cortex',activation:.47},anterior_cingulate:{label:'Anterior Cingulate',activation:.38},amygdala:{label:'Amygdala',activation:.19},parietal_lobe:{label:'Parietal Lobe',activation:.28},occipital_lobe:{label:'Visual Cortex',activation:.51},motor_cortex:{label:'Motor Cortex',activation:.42}}},
-];
+// No sample/fake data — all entries come from real TRIBE v2 analysis
 
 // ── Analyze ──
 async function analyze(text){
   const btn=document.getElementById('go');
   btn.className='btn btn-wait';btn.textContent='Mapping activations…';btn.disabled=true;
   try{
-    let result;
-    if(backend.status==='ok'){
-      const r=await fetch(`${API}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
-      result=await r.json();
-    }else{result=demoResult(text)}
+    if(backend.status!=='ok'||backend.model_mode!=='tribe'){
+      alert('TRIBE model is not available. Brain activation analysis requires the research-grade model running on the backend.');
+      btn.className='btn btn-go';btn.textContent='Analyze';btn.disabled=false;
+      return;
+    }
+    const r=await fetch(`${API}/analyze`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    if(!r.ok){const err=await r.json().catch(()=>({detail:'Analysis failed'}));alert(err.detail||'Analysis failed');btn.className='btn btn-go';btn.textContent='Analyze';btn.disabled=false;return}
+    const result=await r.json();
     const entry={id:'e-'+Date.now(),text,timestamp:Date.now(),...result};
     entries.unshift(entry);selEntry=entry;renderList();updRegPanel(entry.regions);updSummary(entry);
     if(entry.vertex_activations)paintVerts(entry.vertex_activations);
     else if(entry.regions)paintVerts(regionToVerts(entry.regions));
-  }catch(e){console.error(e)}
+  }catch(e){console.error(e);alert('Could not reach the backend. Make sure the server is running.')}
   btn.className='btn btn-go';btn.textContent='Analyze';btn.disabled=false;
   document.getElementById('inp').value='';
 }
 
-function demoResult(text){
-  const lc=text.toLowerCase(),regions={};
-  const kw={nucleus_accumbens:['happy','joy','amazing','love','great','excited','breakthrough','laugh'],amygdala:['sad','anxious','worry','fear','angry','scared','couldn\'t sleep','stress'],hippocampus:['remember','memory','old','nostalgia','college','childhood','past'],prefrontal_cortex:['think','plan','decide','work','analyze','figure','architecture'],temporal_lobe:['talk','said','language','read','listen','word','friend'],insula:['feel','empathy','disgust','aware','emotion'],motor_cortex:['walk','run','move','exercise','action','energy'],occipital_lobe:['see','watch','look','imagine','visual','beautiful','color'],parietal_lobe:['attention','focus','spatial','body','touch'],anterior_cingulate:['conflict','mistake','error','wrong','struggle','whether']};
-  for(const[k,info]of Object.entries(BR)){
-    let a=.08+Math.random()*.2;
-    if(k==='temporal_lobe')a+=.25;
-    const words=kw[k]||[];
-    for(const w of words)if(lc.includes(w))a+=.2;
-    regions[k]={label:info.label,activation:Math.min(1,a)};
-  }
-  const top=Object.entries(regions).sort((a,b)=>b[1].activation-a[1].activation);
-  return{mode:'demo',regions,summary:text.slice(0,60)+'...',dominant:top[0][1].label};
-}
 
 // ── Health ──
 async function checkHealth(){
   try{const r=await fetch(`${API}/health`);backend=await r.json()}
-  catch{backend={status:'offline',model_mode:'demo'}}
+  catch{backend={status:'offline',model_mode:'offline'}}
   const hasText=backend.features&&backend.features.includes('text');
-  const c=backend.model_mode==='tribe'?(hasText?'#6ee7b7':'#67e8f9'):backend.model_mode==='fallback'?'#fcd34d':'#a78bfa';
-  const l=backend.model_mode==='tribe'?(hasText?'TRIBE v2 FULL':'TRIBE v2 AUDIO'):backend.model_mode==='fallback'?'API MODE':'TRIBE v2';
+  let c,l;
+  if(backend.model_mode==='tribe'){c=hasText?'#6ee7b7':'#67e8f9';l=hasText?'TRIBE v2 FULL':'TRIBE v2 AUDIO'}
+  else if(backend.status==='ok'){c='#fbbf24';l='MODEL LOADING'}
+  else{c='#f87171';l='OFFLINE'}
   const dot=document.getElementById('dot'),badge=document.getElementById('badge');
   dot.style.background=c;dot.style.boxShadow=`0 0 12px ${c}44`;
   badge.textContent=l;badge.style.background=`${c}14`;badge.style.color=c;badge.style.border=`1px solid ${c}22`;
   if(backend.model_mode==='tribe')dot.style.animation='pulse 2s infinite';
+  else dot.style.animation='none';
   const sub=document.getElementById('sub-text');
   if(sub&&backend.model_mode==='tribe'&&hasText)sub.textContent='Full multimodal: LLaMA 3.2-3B + Wav2Vec-BERT + Transformer';
   else if(sub&&backend.model_mode==='tribe')sub.textContent='Audio mode: Wav2Vec-BERT + Transformer';
+  else if(sub&&backend.status==='ok')sub.textContent='Backend running but TRIBE model is not loaded — analysis unavailable';
+  else if(sub)sub.textContent='Backend offline — start the server to analyze entries';
+  const goBtn=document.getElementById('go');
+  if(goBtn&&backend.model_mode!=='tribe'){goBtn.title='TRIBE model required for analysis'}
+  else if(goBtn){goBtn.title=''}
 }
 
 // ── Voice Input (Web Speech API) ──
@@ -1444,7 +1512,7 @@ function exportReport(){
   const journalRows=entries.map(e=>{
     const topR=e.regions?Object.entries(e.regions).sort((a,b)=>(b[1].activation||0)-(a[1].activation||0)).slice(0,5):[];
     return`<div style="background:#111827;border:1px solid #1f2937;border-radius:10px;padding:14px;margin-bottom:8px">
-      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><strong style="color:#818cf8">${e.dominant||''}</strong><span style="color:#6b7280;font-size:11px">${e.mode||'demo'}</span></div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:6px"><strong style="color:#818cf8">${e.dominant||''}</strong><span style="color:#6b7280;font-size:11px">${e.mode||''}</span></div>
       <p style="color:#d1d5db;font-size:13px;line-height:1.6;margin-bottom:8px">${e.text}</p>
       <div style="display:flex;gap:6px;flex-wrap:wrap">${topR.map(([k,v])=>`<span style="font-size:10px;padding:2px 8px;border-radius:4px;background:${RC[k]}22;color:${RC[k]}">${v.label} ${Math.round((v.activation||0)*100)}%</span>`).join('')}</div>
     </div>`;
@@ -1750,10 +1818,75 @@ async function uploadFile(){
 }
 window._uploadFile=uploadFile;
 
+// Narrative arc removed — it was built on fabricated per-sentence data.
+// Future: use per-timestep TRIBE predictions for a real narrative arc.
+function hideArc(){const wrap=document.getElementById('arc-wrap');if(wrap)wrap.classList.remove('show');arcData=null;arcIdx=0}
+window._closeArc=hideArc;
+
+// ── Cognitive Weather ──
+function computeWeather(){
+  const allData=[...entries,...memHistory.map(h=>({regions:h.tribe?.regions||{}}))];
+  const withRegions=allData.filter(d=>d.regions&&Object.keys(d.regions).length>0);
+  if(withRegions.length<2)return null;
+
+  const regionStats={};
+  for(const k of Object.keys(BR)){
+    const vals=withRegions.map(d=>d.regions[k]?.activation||0);
+    const avg=vals.reduce((a,b)=>a+b,0)/vals.length;
+    const recent=vals.slice(0,Math.min(3,vals.length));
+    const recentAvg=recent.reduce((a,b)=>a+b,0)/recent.length;
+    regionStats[k]={label:BR[k].label,avg:Math.round(avg*100),recent:Math.round(recentAvg*100),trend:Math.round((recentAvg-avg)*100),color:RC[k]};
+  }
+
+  const sorted=Object.entries(regionStats).sort((a,b)=>b[1].avg-a[1].avg);
+  const dominant=sorted[0];
+  const rising=Object.entries(regionStats).filter(([_,v])=>v.trend>2).sort((a,b)=>b[1].trend-a[1].trend);
+  const falling=Object.entries(regionStats).filter(([_,v])=>v.trend<-2).sort((a,b)=>a[1].trend-b[1].trend);
+
+  const topAct=dominant[1].avg;
+  let icon,title;
+  if(topAct>60){icon='⚡';title='High Neural Activity'}
+  else if(topAct>40){icon='🌤';title='Active & Balanced'}
+  else if(topAct>25){icon='☁️';title='Reflective State'}
+  else{icon='🌙';title='Calm Baseline'}
+
+  const insights=[];
+  if(dominant)insights.push(`Your <strong style="color:${dominant[1].color}">${dominant[1].label}</strong> leads at ${dominant[1].avg}% avg.`);
+  if(rising.length>0)insights.push(`<strong style="color:${rising[0][1].color}">${rising[0][1].label}</strong> is rising (+${rising[0][1].trend}%).`);
+  if(falling.length>0)insights.push(`<strong style="color:${falling[0][1].color}">${falling[0][1].label}</strong> is cooling (${falling[0][1].trend}%).`);
+
+  return{icon,title,dominant:dominant[1],regionStats,sorted,rising,falling,insights,total:withRegions.length};
+}
+
+function renderWeatherHtml(){
+  const w=computeWeather();
+  if(!w)return'';
+  const top4=w.sorted.slice(0,4);
+  const insightText=w.insights.join(' ');
+
+  return`<div class="weather-card">
+    <div class="weather-head">
+      <div class="weather-icn">${w.icon}</div>
+      <div class="weather-tw">
+        <div class="weather-t">${w.title}</div>
+        <div class="weather-st">Cognitive Weather · ${w.total} entries</div>
+      </div>
+    </div>
+    <div class="weather-grid">${top4.map(([k,v])=>
+      `<div class="weather-m">
+        <div class="weather-ml">${v.label}</div>
+        <div class="weather-mv" style="color:${v.color}">${v.avg}%</div>
+        <div class="weather-md">${v.trend>0?`<span style="color:#34d399">↑ ${v.trend}%</span>`:v.trend<0?`<span style="color:#f87171">↓ ${Math.abs(v.trend)}%</span>`:'<span style="color:var(--t5)">→ stable</span>'}</div>
+      </div>`
+    ).join('')}</div>
+    ${insightText?`<div class="weather-insight">${insightText}</div>`:''}
+  </div>`;
+}
+
 // ── Init ──
 async function init(){
   initScene();drawColorbar();initSpeech();
-  entries=[...SAMPLES];selEntry=entries[0];renderList();
+  entries=[];selEntry=null;renderList();
 
   try{
     let r;try{r=await fetch(`${API}/brain_mesh.json`);if(!r.ok)throw 0}catch{r=await fetch('./brain_mesh.json')}
@@ -1762,18 +1895,18 @@ async function init(){
     await new Promise(r=>setTimeout(r,50));
     loadInto(curMesh);
     animateBrainEntrance();
-    if(selEntry.regions){paintVerts(regionToVerts(selEntry.regions));updRegPanel(selEntry.regions);updSummary(selEntry)}
     document.getElementById('loadov').classList.add('hide');
     document.getElementById('rpanel').style.opacity=1;
     document.getElementById('cbar').style.opacity=1;
   }catch(e){document.getElementById('loadtxt').textContent='Error: '+e.message;console.error(e)}
 
-  await checkHealth();setInterval(checkHealth,8000);
+  await checkHealth();setInterval(checkHealth,30000);
   await loadDomains();
   await loadSubjects();
   loadMemoryMeta();
+
   const inp=document.getElementById('inp'),btn=document.getElementById('go');
-  inp.addEventListener('input',()=>btn.disabled=!inp.value.trim());
+  inp.addEventListener('input',()=>{btn.disabled=!inp.value.trim()});
   inp.addEventListener('keydown',e=>{if(e.key==='Enter'&&(e.metaKey||e.ctrlKey)&&inp.value.trim())analyze(inp.value.trim())});
   btn.addEventListener('click',()=>{if(inp.value.trim())analyze(inp.value.trim())});
 }
